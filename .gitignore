@@ -1,0 +1,28 @@
+# Dependencies — Next.js is the only thing here that installs anything
+node_modules/
+
+# Next.js build output
+web/.next/
+web/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Catalyst
+.catalyst/
+.catalystrc
+
+# Secrets — never commit a filled-in copy. .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Logs and OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp

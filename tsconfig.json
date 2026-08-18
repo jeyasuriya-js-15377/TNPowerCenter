@@ -1,0 +1,16 @@
+{
+  "//": "Editor support only. This is a plain JavaScript project with zero dependencies and no build step — nothing here is compiled.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "include": ["functions/**/*.js", "client/**/*.js", "tools/**/*.js", "tests/**/*.js"],
+  "exclude": ["node_modules"]
+}

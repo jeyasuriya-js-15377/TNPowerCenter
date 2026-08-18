@@ -1,0 +1,24 @@
+{
+  "name": "tamil-nadu-power-center",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tamil Nadu Power Center — an executive operating system for government performance, running entirely on Zoho Projects and deployed on Zoho Catalyst.",
+  "scripts": {
+    "test": "node --test tests/engine.test.js",
+    "check": "node --check functions/tnpc_api/index.js && node --check functions/tnpc_api/engine.js && node --check functions/tnpc_api/auth.js && node --check functions/tnpc_api/zoho-client.js && node --check functions/tnpc_api/seed.js && node --check functions/tnpc_api/zoho-schema.js && node --check tools/local-server.js && node --check tools/verify-zoho.js && node --check tools/sync-web.js && echo \"backend files parse\"",
+    "start": "node tools/local-server.js",
+    "verify:zoho": "node tools/verify-zoho.js",
+    "verify:zoho:write": "node tools/verify-zoho.js --write",
+    "web:install": "cd web && npm install",
+    "web:dev": "cd web && npm run dev",
+    "web:build": "cd web && NEXT_PUBLIC_BASE_PATH=/app npm run build",
+    "web:build:root": "cd web && npm run build",
+    "web:sync": "node tools/sync-web.js",
+    "web:ship": "npm run web:build && npm run web:sync"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "license": "UNLICENSED"
+}

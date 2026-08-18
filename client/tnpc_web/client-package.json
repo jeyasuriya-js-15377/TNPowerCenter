@@ -1,0 +1,6 @@
+{
+  "name": "tnpc_web",
+  "version": "1.0.0",
+  "description": "Tamil Nadu Power Center — CM Command Center. Static client for Catalyst Slate; no build step.",
+  "homepage": "/index.html"
+}
