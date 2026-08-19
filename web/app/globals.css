@@ -54,11 +54,10 @@ b,strong{font-weight:600}
 .brand-sub{margin:2px 0 0;color:var(--ink-3);font-size:13px}
 .brand-marks{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 .brand-mark-img{
-  width:36px;height:36px;object-fit:cover;flex:0 0 auto;
-  border-radius:50%;background:#fff;
+  width:36px;height:36px;object-fit:contain;flex:0 0 auto;
+  border-radius:50%;background:#fff;padding:1px;
   box-shadow:0 0 0 1px var(--line-2);
 }
-.brand-mark-img.tn{object-fit:contain;padding:1px}
 .brand.small .brand-mark-img{width:28px;height:28px}
 .brand.small strong{display:block;font-size:14px}
 .backbone{color:var(--ink-3);font-size:11px;letter-spacing:.03em;text-transform:uppercase}
