@@ -5,6 +5,8 @@ import { humanise } from '@/lib/format';
 const VIEWS = [
   { key: 'command', label: 'Command Center' },
   { key: 'complaints', label: 'Complaints' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'contacts', label: 'Contacts' },
   { key: 'directives', label: 'Directives' },
   { key: 'intake', label: 'Citizen Intake' },
 ];

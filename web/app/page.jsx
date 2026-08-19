@@ -19,6 +19,8 @@ import CommandCenter from '@/components/CommandCenter';
 import Complaints from '@/components/Complaints';
 import Directives from '@/components/Directives';
 import Intake from '@/components/Intake';
+import Monthly from '@/components/Monthly';
+import Contacts from '@/components/Contacts';
 import Drawer from '@/components/Drawer';
 import Toast from '@/components/Toast';
 
@@ -118,6 +120,8 @@ export default function Page() {
         )}
         {view === 'complaints' && <Complaints {...shared} />}
         {view === 'directives' && <Directives {...shared} />}
+        {view === 'monthly' && <Monthly {...shared} />}
+        {view === 'contacts' && <Contacts {...shared} />}
         {view === 'intake' && <Intake {...shared} />}
       </main>
 

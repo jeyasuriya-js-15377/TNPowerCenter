@@ -116,21 +116,31 @@ async function refreshAccessToken() {
   return tokenCache.value;
 }
 
-async function call(method, path, { query = null, json = null, retry = true } = {}) {
+/**
+ * `form` sends application/x-www-form-urlencoded instead of JSON.
+ *
+ * Not every Zoho Projects v3 endpoint takes JSON. The add-users-to-project
+ * endpoint is one that does not: posting JSON to it returns a bare 400 with no
+ * field detail, while the same payload form-encoded is accepted.
+ */
+async function call(method, path, { query = null, json = null, form = null, retry = true } = {}) {
   const token = await getAccessToken();
   const qs = query ? `?${new URLSearchParams(query)}` : '';
+  const encodedForm = form ? new URLSearchParams(form).toString() : null;
+
   const { status, body } = await request(method, `${API_BASE}${path}${qs}`, {
     headers: {
       Authorization: `Zoho-oauthtoken ${token}`,
       ...(json ? { 'Content-Type': 'application/json' } : {}),
+      ...(encodedForm ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
-    body: json ? JSON.stringify(json) : null,
+    body: json ? JSON.stringify(json) : encodedForm,
   });
 
   // A 401 on a warm instance usually means the cached token aged out.
   if (status === 401 && retry) {
     tokenCache = { value: null, expiresAt: 0 };
-    return call(method, path, { query, json, retry: false });
+    return call(method, path, { query, json, form, retry: false });
   }
 
   if (status >= 400) {
@@ -148,6 +158,95 @@ async function call(method, path, { query = null, json = null, retry = true } = 
  * ------------------------------------------------------------------ */
 
 const portal = () => `/portal/${PORTAL_ID}`;
+
+/**
+ * Every project in the portal, across pages.
+ *
+ * Zoho caps a page at 100 regardless of what `per_page` asks for, so a single
+ * request silently truncates once a portal has more than 100 projects. That
+ * truncation is exactly what let a seeder conclude "nothing exists here" and
+ * create a duplicate set. Paginate until a short page comes back.
+ *
+ * Throws on failure. Callers that write MUST NOT treat an error as "empty".
+ */
+const extractRows = (data) => {
+  const rows = (data && (data.result || data.projects)) || (Array.isArray(data) ? data : null);
+  return Array.isArray(rows) ? rows : [];
+};
+
+/**
+ * Pagination styles this endpoint has been observed to accept.
+ *
+ * `page`/`per_page` works through the MCP server but returned an empty result
+ * set from a direct call, while `index`/`range` is the other documented style.
+ * Rather than hard-code a guess — the guess is what produced three generations of
+ * duplicate projects — try each style, keep the first that returns rows, and
+ * remember it for the life of the process.
+ */
+const PAGINATION_STYLES = [
+  { name: 'index/range', build: (n, size) => ({ index: (n - 1) * size + 1, range: size }) },
+  { name: 'page/per_page', build: (n, size) => ({ page: n, per_page: size }) },
+  { name: 'per_page only', build: (n, size) => (n === 1 ? { per_page: size } : null) },
+  { name: 'no params', build: (n) => (n === 1 ? {} : null) },
+];
+
+let workingStyle = null;
+
+/**
+ * Every project in the portal.
+ *
+ * Throws on transport failure. Callers that then WRITE must not treat an empty
+ * result as "nothing exists" — see the abort guard in tools/seed-portal.js.
+ */
+async function listProjects({ maxPages = 20, pageSize = 100 } = {}) {
+  const styles = workingStyle ? [workingStyle] : PAGINATION_STYLES;
+
+  for (const style of styles) {
+    const all = [];
+    let failed = false;
+
+    for (let n = 1; n <= maxPages; n += 1) {
+      const query = style.build(n, pageSize);
+      if (query === null) break; // this style is single-page only
+      let rows;
+      try {
+        rows = extractRows(await call('GET', `${portal()}/projects`, { query }));
+      } catch (err) {
+        // A style the endpoint rejects outright — move on to the next.
+        if (n === 1) { failed = true; break; }
+        throw err;
+      }
+      if (rows.length === 0) break;
+      all.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+
+    if (!failed && all.length > 0) {
+      if (!workingStyle) {
+        workingStyle = style;
+        if (process.env.ZOHO_DEBUG) console.error(`[zoho] project pagination: ${style.name}`);
+      }
+      // De-duplicate by id: overlapping offsets across styles are possible.
+      const seen = new Set();
+      return all.filter((p) => {
+        const id = String(p.id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    }
+  }
+
+  return [];
+}
+
+/** Which pagination style worked, for diagnostics. */
+const projectPaginationStyle = () => (workingStyle ? workingStyle.name : 'none succeeded');
+
+async function createProject(payload) {
+  const data = await call('POST', `${portal()}/projects`, { json: payload });
+  return (data && (data.result || data)) || null;
+}
 
 async function listIssues(projectId, { page = 1, perPage = 200 } = {}) {
   const data = await call('GET', `${portal()}/projects/${projectId}/issues`, {
@@ -184,21 +283,53 @@ async function listIssueComments(projectId, issueId) {
   return (data && (data.result || data.comments)) || [];
 }
 
-async function listRecords(moduleApiName, { page = 1, perPage = 200 } = {}) {
-  const data = await call('GET', `${portal()}/modules/${moduleApiName}/records`, {
-    query: { page, per_page: perPage },
+/**
+ * Custom module records.
+ *
+ * The path is `/module/{api_name}/entities` — singular "module", and "entities"
+ * rather than "records". Anything else returns
+ * `400 URL_RULE_NOT_CONFIGURED — Given URL is wrong`, which reads like a
+ * permissions or configuration problem and is really just a wrong URL.
+ */
+async function listRecords(moduleApiName, { perPage = 200 } = {}) {
+  const data = await call('GET', `${portal()}/module/${moduleApiName}/entities`, {
+    query: { per_page: perPage },
   });
-  return (data && (data.result || data.records)) || [];
+
+  // Zoho v3 has returned records under several keys across endpoints. Accept any
+  // of them, and never hand back a non-array — a caller doing .map() on an
+  // object turns a read problem into an opaque 500.
+  const candidate =
+    (data && (data.result || data.entities || data.records)) || (Array.isArray(data) ? data : null);
+  return Array.isArray(candidate) ? candidate : [];
 }
 
 async function createRecord(moduleApiName, payload) {
-  const data = await call('POST', `${portal()}/modules/${moduleApiName}/records`, { json: payload });
+  const data = await call('POST', `${portal()}/module/${moduleApiName}/entities`, { json: payload });
+  return (data && (data.result || data)) || null;
+}
+
+async function updateRecord(moduleApiName, recordId, payload) {
+  const data = await call('PATCH', `${portal()}/module/${moduleApiName}/entities/${recordId}`, {
+    json: payload,
+  });
   return (data && (data.result || data)) || null;
 }
 
 async function createTask(projectId, payload) {
   const data = await call('POST', `${portal()}/projects/${projectId}/tasks`, { json: payload });
   return (data && (data.result || data)) || null;
+}
+
+/**
+ * Add portal users to a project. Form-encoded — see call() above.
+ * `userdetails` is a JSON-encoded STRING, not an array, and needs role_id and
+ * profile_id rather than the ZPUID you may already have.
+ */
+async function addUsersToProject(projectId, users, { notify = false } = {}) {
+  return call('POST', `${portal()}/projects/${projectId}/users`, {
+    form: { notify: String(notify), userdetails: JSON.stringify(users) },
+  });
 }
 
 async function listProjectUsers(projectId) {
@@ -211,6 +342,9 @@ async function listProjectUsers(projectId) {
 module.exports = {
   call,
   getAccessToken,
+  listProjects,
+  projectPaginationStyle,
+  createProject,
   listIssues,
   getIssue,
   createIssue,
@@ -219,6 +353,8 @@ module.exports = {
   listIssueComments,
   listRecords,
   createRecord,
+  updateRecord,
   createTask,
+  addUsersToProject,
   listProjectUsers,
 };

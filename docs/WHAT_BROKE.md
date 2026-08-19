@@ -114,7 +114,44 @@ place, `functions/tnpc_api/zoho-schema.js`, so a rename is a one-line change.
 
 ---
 
-## 5. Custom modules are created in `draft` and are invisible until activated
+## 5. The custom-module REST path is not what the MCP tool names imply
+
+**Cost: one failed verification run — caught in seconds because a script was
+looking for it, rather than after deploy.**
+
+The MCP tool is called `get_record_list` and takes a `module_api_name`, so
+`/portal/{id}/modules/{name}/records` is the obvious guess. It is wrong, and the
+error tells you nothing useful:
+
+```json
+{"status_code":"400","title":"URL_RULE_NOT_CONFIGURED",
+ "details":[{"message":"Given URL is wrong"}]}
+```
+
+That reads like a permissions or portal-configuration problem. It is a typo in a
+URL. The real path is **singular `module`** and **`entities`, not `records`**:
+
+```
+GET    /api/v3/portal/{portal_id}/module/{api_name}/entities
+POST   /api/v3/portal/{portal_id}/module/{api_name}/entities
+PATCH  /api/v3/portal/{portal_id}/module/{api_name}/entities/{record_id}
+```
+
+**How to get the real path out of the MCP server:** call the tool with a
+deliberately invalid module name. The validation error echoes the URL it was
+about to use in its `instance` field:
+
+```json
+{"instance":"/api/v3/portal/60083686827/module/zz_does_not_exist/entities"}
+```
+
+That trick works for any endpoint whose path you are unsure of, and it is faster
+than reading documentation.
+
+Note that issue and project paths *are* plural (`/projects/{id}/issues`), so
+there is no single rule to memorise — verify each one.
+
+## 6. Custom modules are created in `draft` and are invisible until activated
 
 **Cost: would have been confusing later; caught early.**
 
@@ -125,7 +162,7 @@ either way.
 
 ---
 
-## 6. No package registry in the build environment
+## 7. No package registry in the build environment
 
 **Cost: an architectural decision, not lost time.**
 

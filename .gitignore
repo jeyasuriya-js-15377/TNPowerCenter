@@ -10,6 +10,9 @@ next-env.d.ts
 # Packaged upload artifact
 dist/
 
+# Scratch files
+tools/.planner.tmp.js
+
 # Catalyst
 .catalyst/
 .catalystrc

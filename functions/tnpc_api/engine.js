@@ -15,6 +15,7 @@ const {
   ISSUE_STATUS_BY_ID,
   SEVERITY_BY_ID,
   ISSUE_FIELDS,
+  resolveOfficer,
   SLA_POLICY,
   SCORECARD_WEIGHTS,
   HEALTH_BANDS,
@@ -45,6 +46,7 @@ function normalizeComplaint(issue, department) {
     title: issue.name || '(untitled)',
     description: issue.description || '',
     departmentId: department.id,
+    departmentKey: department.key,
     departmentName: department.name,
     departmentShort: department.short,
     district: issue[ISSUE_FIELDS.district] || 'Unassigned',
@@ -61,9 +63,9 @@ function normalizeComplaint(issue, department) {
     stage: LIFECYCLE[statusKey] || 'ROUTED',
     severity: severity.label,
     severityWeight: severity.weight,
-    assignee: issue.assignee
-      ? { id: issue.assignee.zpuid, name: issue.assignee.name, email: issue.assignee.email }
-      : null,
+    // Resolved to an officer persona where one is mapped, so the executive view
+    // reads "Thiru R. Sundaram, Executive Engineer" rather than a login alias.
+    assignee: resolveOfficer(issue.assignee),
     isClosed: statusKey === 'CLOSED',
     isReopened: statusKey === 'REOPENED',
   };
@@ -489,7 +491,168 @@ function districtPulse(complaints, now) {
     .sort((a, b) => b.breached - a.breached || b.total - a.total);
 }
 
+/* ------------------------------------------------------------------ *
+ * 8. Monthly performance and the Department of the Month award
+ *
+ * The Command Center answers "what is wrong right now". This answers a
+ * different executive question: "who is actually improving, and who should be
+ * recognised". Recognition needs a defensible basis, so the award carries the
+ * reasoning that produced it and the runners-up it beat.
+ * ------------------------------------------------------------------ */
+
+/** Minimum complaints in the month before a department can be ranked. */
+const AWARD_MIN_VOLUME = 5;
+
+const monthKey = (iso) => String(iso || '').slice(0, 7); // YYYY-MM
+const monthLabel = (key) => {
+  const [y, m] = key.split('-');
+  const names = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return `${names[Number(m) - 1] || m} ${y}`;
+};
+
+/**
+ * Per-month, per-department performance with ranking and an award.
+ *
+ * A month is scored on the complaints *reported* in it, so a department is
+ * judged on the work that arrived on its desk that month rather than on whatever
+ * happens to be open today.
+ *
+ * `asOfEndOfMonth` matters: a complaint reported in June and still unresolved in
+ * June is a June failure, and evaluating it against today's clock would let a
+ * department escape a bad month simply because time passed. SLA state is
+ * therefore evaluated at the end of the month being scored.
+ */
+function monthlyPerformance(departments, complaints, now, { months = 6 } = {}) {
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+
+  // Build the list of month keys, most recent first.
+  const keys = [];
+  const cursor = new Date(nowMs);
+  cursor.setUTCDate(1);
+  for (let i = 0; i < months; i += 1) {
+    keys.push(cursor.toISOString().slice(0, 7));
+    cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+  }
+
+  const byMonth = new Map(keys.map((k) => [k, []]));
+  for (const c of complaints) {
+    const k = monthKey(c.reportedAt || c.createdAt);
+    if (byMonth.has(k)) byMonth.get(k).push(c);
+  }
+
+  const previousScores = new Map();
+  const result = [];
+
+  // Oldest first, so month-over-month deltas can be computed as we go.
+  for (const key of [...keys].reverse() ) {
+    const rows = byMonth.get(key) || [];
+
+    // End of the month, or now if the month is still running.
+    const endOfMonth = Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 1) - 1;
+    const asOf = new Date(Math.min(endOfMonth, nowMs));
+
+    const cards = departments
+      .map((dept) => {
+        const deptRows = rows.filter((c) => c.departmentId === dept.id);
+        const card = departmentScorecard(dept, deptRows, asOf);
+        const prev = previousScores.get(dept.id);
+        return {
+          ...card,
+          previousScore: prev ?? null,
+          delta: card.score != null && prev != null ? card.score - prev : null,
+        };
+      })
+      .filter((c) => c.counts.total > 0);
+
+    cards.forEach((c) => { if (c.score != null) previousScores.set(c.departmentId, c.score); });
+
+    const ranked = [...cards]
+      .filter((c) => c.score != null && c.counts.total >= AWARD_MIN_VOLUME)
+      .sort((a, b) => b.score - a.score || b.counts.total - a.counts.total);
+
+    ranked.forEach((c, i) => { c.rank = i + 1; });
+
+    const winner = ranked[0] || null;
+    const mostImproved = [...cards]
+      .filter((c) => c.delta != null && c.counts.total >= AWARD_MIN_VOLUME)
+      .sort((a, b) => b.delta - a.delta)[0] || null;
+
+    result.push({
+      month: key,
+      label: monthLabel(key),
+      isCurrent: key === keys[0],
+      complaints: rows.length,
+      pulse: statePulse(cards),
+      departments: cards.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)),
+      ranked: ranked.slice(0, 5).map((c) => ({
+        rank: c.rank, departmentId: c.departmentId, department: c.department,
+        short: c.short, score: c.score, health: c.health, total: c.counts.total,
+      })),
+      award: winner
+        ? {
+            departmentId: winner.departmentId,
+            department: winner.department,
+            short: winner.short,
+            score: winner.score,
+            minister: winner.minister,
+            secretary: winner.secretary,
+            citation: buildCitation(winner, ranked[1] || null, monthLabel(key)),
+            basis: {
+              minimumVolume: AWARD_MIN_VOLUME,
+              complaintsHandled: winner.counts.total,
+              closedAndAccepted: winner.counts.closed,
+              slaBreaches: winner.counts.breached,
+              rejectedByCitizens: winner.counts.reopened,
+              dimensions: Object.fromEntries(
+                Object.entries(winner.dimensions).map(([k, d]) => [
+                  k, { label: d.label, value: d.value == null ? null : Math.round(d.value * 100), detail: d.detail },
+                ])
+              ),
+            },
+            runnersUp: ranked.slice(1, 3).map((c) => ({ department: c.department, score: c.score })),
+          }
+        : null,
+      needsAttention: ranked.length ? ranked[ranked.length - 1] : null,
+      mostImproved: mostImproved
+        ? { department: mostImproved.department, delta: mostImproved.delta, score: mostImproved.score }
+        : null,
+    });
+  }
+
+  // Most recent month first for display.
+  result.reverse();
+  return { months: result, latest: result[0] || null, minimumVolume: AWARD_MIN_VOLUME };
+}
+
+/** Plain-language justification, so the award is never a bare number. */
+function buildCitation(winner, runnerUp, label) {
+  const c = winner.counts;
+  const parts = [
+    `${winner.department} recorded the highest departmental score in ${label} at ${winner.score}/100`,
+    `across ${c.total} complaints`,
+  ];
+
+  if (c.closed) parts.push(`${c.closed} of which were resolved and accepted by the citizen`);
+  if (!c.breached) parts.push('with no SLA breach in the month');
+  else parts.push(`with ${c.breached} SLA breach${c.breached === 1 ? '' : 'es'}`);
+  if (!c.reopened) parts.push('and no resolution rejected by a citizen');
+
+  let text = `${parts.join(', ')}.`;
+  if (runnerUp) {
+    text += ` It placed ahead of ${runnerUp.department} (${runnerUp.score}/100).`;
+  }
+  const outcome = winner.dimensions.citizenOutcome;
+  if (outcome && outcome.value != null) {
+    text += ` Citizen outcome stood at ${Math.round(outcome.value * 100)}% — ${outcome.detail.toLowerCase()}.`;
+  }
+  return text;
+}
+
 module.exports = {
+  monthlyPerformance,
+  monthLabel,
+  AWARD_MIN_VOLUME,
   normalizeComplaint,
   slaState,
   resolutionHours,

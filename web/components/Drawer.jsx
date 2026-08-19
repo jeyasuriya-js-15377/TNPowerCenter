@@ -390,6 +390,47 @@ function ComplaintBody({ id, request, notify, closeDrawer, refreshDashboard }) {
         </dl>
       </div>
 
+      {detail.contact && (
+        <div className="dsec">
+          <h4>Reach someone about this complaint</h4>
+          {detail.contact.officer && detail.contact.officer.phone && (
+            <div className="contact-row">
+              <div className="cr-step">1</div>
+              <div className="cr-main">
+                <div className="cr-holder">{detail.contact.officer.name}</div>
+                <div className="cr-label">
+                  {detail.contact.officer.designation}
+                  {detail.contact.officer.district ? ` · ${detail.contact.officer.district}` : ''}
+                </div>
+              </div>
+              <div className="cr-reach">
+                <a className="cr-phone" href={`tel:${detail.contact.officer.phone.replace(/\s/g, '')}`}>
+                  {detail.contact.officer.phone}
+                </a>
+              </div>
+            </div>
+          )}
+          {[detail.contact.controlRoom, detail.contact.secretary]
+            .filter(Boolean)
+            .map((cc, i) => (
+              <div className="contact-row" key={cc.label}>
+                <div className="cr-step">{i + 2}</div>
+                <div className="cr-main">
+                  <div className="cr-holder">{cc.holder}</div>
+                  <div className="cr-label">{cc.label}</div>
+                </div>
+                <div className="cr-reach">
+                  <a className="cr-phone" href={`tel:${String(cc.phone).replace(/\s/g, '')}`}>{cc.phone}</a>
+                </div>
+              </div>
+            ))}
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 8 }}>
+            Escalate in order. Numbers are non-dialable placeholders — every one begins with 5,
+            which Indian mobile numbering never assigns.
+          </p>
+        </div>
+      )}
+
       <div className="dsec">
         <h4>SLA</h4>
         <dl className="kv">

@@ -19,45 +19,137 @@
  * Every ID below was created through the Zoho Projects MCP server.
  */
 
+const registry = require('./government-registry');
+
 const PORTAL_ID = process.env.ZOHO_PORTAL_ID || '60083686827';
 
-/** Secretariat departments. `id` is the Zoho Project ID. */
-const DEPARTMENTS = [
-  {
-    id: '479100000000079186',
-    name: 'Health & Family Welfare',
-    short: 'Health',
-    minister: 'Hon. Minister for Health & Family Welfare',
-    secretary: 'Principal Secretary, Health & Family Welfare',
-  },
-  {
-    id: '479100000000079263',
-    name: 'Municipal Administration & Water Supply',
-    short: 'Municipal & Water',
-    minister: 'Hon. Minister for Municipal Administration',
-    secretary: 'Principal Secretary, MAWS',
-  },
-  {
-    id: '479100000000076361',
-    name: 'Highways & Minor Ports',
-    short: 'Highways',
-    minister: 'Hon. Minister for Highways',
-    secretary: 'Principal Secretary, Highways',
-  },
-  {
-    id: '479100000000081232',
-    name: 'Energy (TANGEDCO)',
-    short: 'Energy',
-    minister: 'Hon. Minister for Electricity',
-    secretary: 'Principal Secretary, Energy',
-  },
-  {
-    id: '479100000000079340',
-    name: 'Revenue & Disaster Management',
-    short: 'Revenue',
-    minister: 'Hon. Minister for Revenue',
-    secretary: 'Principal Secretary, Revenue',
-  },
+/**
+ * Secretariat departments.
+ *
+ * Sourced from `government-registry.js`, which carries all 38 secretariat
+ * departments with portfolio titles, fictional Principal Secretaries and
+ * non-dialable contact numbers.
+ *
+ * `id` is the Zoho Project ID and is resolved AT RUNTIME by matching the
+ * project name — see resolveDepartments() in index.js. The five IDs baked into
+ * the registry are a fallback so a portal seeded before that change keeps
+ * working. Everything else starts null and is filled in on first load.
+ */
+const DEPARTMENTS = registry.DEPARTMENTS.map((d) => ({ ...d, id: null }));
+
+/** Departments that have a resolved Zoho project and can therefore be read. */
+const activeDepartments = () => DEPARTMENTS.filter((d) => d.id);
+
+/**
+ * Officer roster.
+ *
+ * Zoho portal users take their display name from the Zoho account, so an
+ * invited alias renders as "jeyasuriya.js+tvl.water" — accurate but useless on
+ * an executive screen. Each alias is therefore mapped to the officer persona it
+ * represents, and the engine substitutes the persona when it shapes a complaint.
+ *
+ * Assignment in Zoho is real: these are genuine portal users holding genuine
+ * issues. Only the label shown to the Chief Minister is resolved through here.
+ */
+/**
+ * Officer accounts are invited at a non-routable domain, so the address derives
+ * from the officer's own name — Zoho shows `thiru.r.sundaram` rather than a
+ * `+alias` on somebody's personal mailbox. No Zoho account is required and the
+ * invitation cannot reach a real inbox, which is the point: `.demo` is not a
+ * delegated TLD. (`.invalid` is the RFC-reserved equivalent if you prefer it.)
+ */
+const OFFICER_EMAIL_DOMAIN = process.env.OFFICER_EMAIL_DOMAIN || 'tnpowercenter.demo';
+
+/** "Thirumathi S. Bhuvaneswari" → "thirumathi.s.bhuvaneswari" */
+const slug = (name) =>
+  String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+
+const officerEmail = (name) => `${slug(name)}@${OFFICER_EMAIL_DOMAIN}`;
+
+/**
+ * These officers are fictional. Designations and the reporting structure follow
+ * real Tamil Nadu administrative practice — Executive Engineer, Tahsildar,
+ * Revenue Divisional Officer, Deputy Director of Medical Services — but no
+ * individual named here is a real person, and the performance data attached to
+ * them is synthetic.
+ */
+const OFFICERS = [
+  // Municipal Administration & Water Supply
+  { name: 'Thiru R. Sundaram', designation: 'Executive Engineer, Water Supply', dept: 'Municipal & Water', district: 'Tiruvallur' },
+  { name: 'Thirumathi K. Vasanthi', designation: 'Assistant Commissioner, Solid Waste', dept: 'Municipal & Water', district: 'Chennai' },
+  { name: 'Thiru M. Ilangovan', designation: 'Assistant Engineer, Water Supply', dept: 'Municipal & Water', district: 'Coimbatore' },
+  { name: 'Thiru S. Balamurugan', designation: 'Municipal Commissioner', dept: 'Municipal & Water', district: 'Madurai' },
+  // Health & Family Welfare
+  { name: 'Dr. S. Anitha', designation: 'Deputy Director of Medical Services', dept: 'Health', district: 'Chennai' },
+  { name: 'Dr. P. Ramanathan', designation: 'Joint Director of Health Services', dept: 'Health', district: 'Madurai' },
+  { name: 'Dr. K. Vijayalakshmi', designation: 'District Health Officer', dept: 'Health', district: 'Coimbatore' },
+  // Highways & Minor Ports
+  { name: 'Thiru V. Karthikeyan', designation: 'Divisional Engineer, Highways', dept: 'Highways', district: 'Salem' },
+  { name: 'Thiru A. Selvaraj', designation: 'Assistant Divisional Engineer', dept: 'Highways', district: 'Madurai' },
+  { name: 'Thiru J. Ganesan', designation: 'Divisional Engineer, Highways', dept: 'Highways', district: 'Thanjavur' },
+  // Energy
+  { name: 'Thiru G. Prabhakaran', designation: 'Executive Engineer, Operation & Maintenance', dept: 'Energy', district: 'Coimbatore' },
+  { name: 'Thirumathi R. Deepa', designation: 'Assistant Executive Engineer', dept: 'Energy', district: 'Chennai' },
+  { name: 'Thiru P. Muthukumar', designation: 'Executive Engineer, Distribution', dept: 'Energy', district: 'Salem' },
+  // Revenue & Disaster Management
+  { name: 'Thiru K. Murugesan', designation: 'Tahsildar', dept: 'Revenue', district: 'Thanjavur' },
+  { name: 'Thirumathi S. Bhuvaneswari', designation: 'Deputy Tahsildar', dept: 'Revenue', district: 'Tiruvallur' },
+  { name: 'Thiru N. Arivazhagan', designation: 'Revenue Divisional Officer', dept: 'Revenue', district: 'Madurai' },
+].map((o, i) => ({
+  ...o,
+  alias: slug(o.name),
+  email: officerEmail(o.name),
+  // Non-dialable by construction — see government-registry.js.
+  phone: registry.demoMobile(i + 60),
+  officePhone: registry.demoLandline(i + 80),
+}));
+
+const OFFICER_BY_EMAIL = new Map(OFFICERS.map((o) => [o.email.toLowerCase(), o]));
+
+/**
+ * The original portal accounts, kept mapped so complaints seeded before the
+ * officer roster existed still read sensibly instead of showing a login alias.
+ */
+const LEGACY_OFFICERS = new Map([
+  ['jeyasuriya.js+cm@zohotest.com', { name: 'CM War Room', designation: 'Chief Minister’s Office' }],
+  ['jeyasuriya.js+inlivetrail@zohotest.com', { name: 'Thiru N. Rajagopal', designation: 'Nodal Officer' }],
+  ['jeyasuriya.js+zia@zohotest.com', { name: 'Thirumathi L. Meenakshi', designation: 'Assistant Engineer' }],
+  ['jeyasuriya.js+tvl.water@zohotest.com', { name: 'Thiru R. Sundaram', designation: 'Executive Engineer, Water Supply' }],
+]);
+
+/**
+ * Resolve a Zoho assignee into an officer persona.
+ * Falls back to whatever Zoho reports, so an unmapped user is never hidden.
+ */
+function resolveOfficer(assignee) {
+  if (!assignee) return null;
+  const email = String(assignee.email || '').toLowerCase();
+  const match = OFFICER_BY_EMAIL.get(email) || LEGACY_OFFICERS.get(email);
+  return {
+    id: assignee.zpuid || assignee.id || null,
+    email: assignee.email || null,
+    name: match ? match.name : assignee.name || 'Unassigned',
+    designation: match ? match.designation : null,
+  };
+}
+
+/** Revenue districts covered by the demo portal. */
+const DISTRICTS = [
+  { name: 'Chennai', code: 'TN-CHN', region: 'Chennai' },
+  { name: 'Tiruvallur', code: 'TN-TVL', region: 'Chennai' },
+  { name: 'Kancheepuram', code: 'TN-KPM', region: 'Chennai' },
+  { name: 'Coimbatore', code: 'TN-CBE', region: 'Coimbatore' },
+  { name: 'Tiruppur', code: 'TN-TRP', region: 'Coimbatore' },
+  { name: 'Madurai', code: 'TN-MDU', region: 'Madurai' },
+  { name: 'Ramanathapuram', code: 'TN-RMD', region: 'Madurai' },
+  { name: 'Salem', code: 'TN-SLM', region: 'Salem' },
+  { name: 'Erode', code: 'TN-ERD', region: 'Salem' },
+  { name: 'Thanjavur', code: 'TN-TNJ', region: 'Trichy' },
+  { name: 'Tiruchirappalli', code: 'TN-TRY', region: 'Trichy' },
+  { name: 'Tirunelveli', code: 'TN-TVL2', region: 'Tirunelveli' },
 ];
 
 /** Custom modules created via MCP. */
@@ -189,6 +281,14 @@ const ATTENTION_FACTORS = {
 module.exports = {
   PORTAL_ID,
   DEPARTMENTS,
+  activeDepartments,
+  DEPARTMENT_BY_KEY: registry.DEPARTMENT_BY_KEY,
+  DEPARTMENT_BY_NAME: registry.DEPARTMENT_BY_NAME,
+  OFFICERS,
+  OFFICER_BY_EMAIL,
+  resolveOfficer,
+  officerEmail,
+  DISTRICTS,
   MODULES,
   ISSUE_STATUS,
   ISSUE_STATUS_BY_ID,

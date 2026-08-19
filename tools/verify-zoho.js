@@ -16,7 +16,8 @@
  */
 
 const zoho = require('../functions/tnpc_api/zoho-client');
-const { DEPARTMENTS, MODULES, PORTAL_ID, ISSUE_FIELDS } = require('../functions/tnpc_api/zoho-schema');
+const { MODULES, PORTAL_ID, ISSUE_FIELDS } = require('../functions/tnpc_api/zoho-schema');
+const { resolveDepartments, provisioned } = require('../functions/tnpc_api/resolve-departments');
 
 const WRITE = process.argv.includes('--write');
 const results = [];
@@ -55,7 +56,34 @@ async function check(label, fn) {
     process.exit(1);
   }
 
-  const dept = DEPARTMENTS[1]; // Municipal & Water — has seeded data
+  await check('GET projects — the list the seeder depends on', async () => {
+    const projects = await zoho.listProjects();
+    if (!Array.isArray(projects)) throw new Error('Expected an array of projects');
+    if (projects.length === 0) {
+      throw new Error(
+        'Zero projects returned. Do NOT run the seeder — it would treat this as an '
+        + 'empty portal and create a duplicate of every department.'
+      );
+    }
+    const names = new Set(projects.map((p) => String(p.name || '').trim().toLowerCase()));
+    const dupes = projects.length - names.size;
+    return `${projects.length} projects, ${names.size} unique names`
+      + `  [pagination: ${zoho.projectPaginationStyle()}]`
+      + (dupes ? `  ${dupes} DUPLICATES — run tools/dedupe-projects.js` : '');
+  });
+
+  // Resolve by name. There are no hard-coded project IDs — a stale one returns
+  // 410 RESOURCE_TRASHED long after the project was removed, which is exactly
+  // how this check broke last time.
+  const departments = await resolveDepartments(zoho, { force: true });
+  const live = provisioned(departments);
+  console.log(`  ${dim(`resolved ${live.length}/${departments.length} departments to a project`)}\n`);
+
+  const dept = live.find((d) => d.short === 'Municipal & Water') || live[0];
+  if (!dept) {
+    console.log(`  ${r('No department resolved to a project.')} Run the seeder to provision them.\n`);
+    process.exit(1);
+  }
 
   await check(`GET issues — ${dept.short}`, async () => {
     const issues = await zoho.listIssues(dept.id);
@@ -64,11 +92,16 @@ async function check(label, fn) {
     return `${issues.length} issues, ${withFields.length} carrying sla_due`;
   });
 
-  await check('GET issues — every department', async () => {
-    const counts = await Promise.all(
-      DEPARTMENTS.map(async (d) => `${d.short}:${(await zoho.listIssues(d.id)).length}`)
-    );
-    return counts.join('  ');
+  await check('GET issues — every provisioned department', async () => {
+    // Only departments with a resolved project ID. The registry carries all 38,
+    // most of which have no project until the seeder provisions one; asking Zoho
+    // for /projects/null/issues is a bug in the check, not in the portal.
+    const counts = [];
+    for (const d of live) {
+      const n = (await zoho.listIssues(d.id)).length;
+      if (n > 0) counts.push(`${d.short}:${n}`);
+    }
+    return `${live.length} provisioned, ${counts.length} holding issues — ${counts.join('  ') || 'none'}`;
   });
 
   let sampleIssue = null;
@@ -144,12 +177,9 @@ async function check(label, fn) {
     });
 
     if (created) {
-      await check('Trash the check issue', async () => {
-        await zoho.call('POST', `/portal/${PORTAL_ID}/trash`, {
-          json: { module: 'issues', items: [String(created.id)] },
-        });
-        return 'trashed';
-      });
+      console.log(
+        `\n  ${dim(`Delete issue ${created.id} ("CONNECTIVITY CHECK") from the portal by hand.`)}`
+      );
     }
 
     console.log(`\n  ${dim('Remove any remaining "CONNECTIVITY CHECK" records from the portal before recording.')}`);

@@ -14,7 +14,10 @@ const engine = require('../functions/tnpc_api/engine');
 const auth = require('../functions/tnpc_api/auth');
 const { SEVERITY, ISSUE_STATUS, DEPARTMENTS } = require('../functions/tnpc_api/zoho-schema');
 
-const DEPT = DEPARTMENTS[1]; // Municipal & Water
+// Looked up by short name, not by index: the registry now carries 38
+// departments and its ordering is not something tests should depend on.
+const DEPT = DEPARTMENTS.find((d) => d.short === 'Municipal & Water');
+const OTHER_DEPT = DEPARTMENTS.find((d) => d.short === 'Health');
 const NOW = new Date('2026-08-19T00:00:00.000Z');
 
 function issue(overrides = {}) {
@@ -196,8 +199,10 @@ test('auth: the War Room analyst sees everything and cannot issue a directive', 
 test('auth: a department team is confined to its own department', () => {
   const s = auth.login('water@tnpowercenter.in', 'Water@2026');
   const claims = auth.verify(s.token);
-  assert.equal(auth.inScope(claims, '479100000000079263'), true, 'own department');
-  assert.equal(auth.inScope(claims, DEPARTMENTS[0].id), false, 'another department');
+  assert.equal(auth.inScope(claims, DEPT), true, 'own department');
+  assert.equal(auth.inScope(claims, OTHER_DEPT), false, 'another department');
+  assert.equal(auth.inScope(claims, 'municipal_water'), true, 'by key');
+  assert.equal(auth.inScope(claims, 'health'), false, 'other key');
   assert.equal(auth.scopedDepartments(claims, DEPARTMENTS).length, 1);
 });
 
@@ -216,8 +221,8 @@ test('auth: a tampered token fails verification', () => {
 
 test('pulse: reports how many departments actually had enough data to score', () => {
   const cards = [
-    engine.departmentScorecard(DEPARTMENTS[0], [norm({ statusId: ISSUE_STATUS.CLOSED, satisfaction: 'Satisfied' })], NOW),
-    engine.departmentScorecard(DEPARTMENTS[1], [], NOW),
+    engine.departmentScorecard(DEPT, [norm({ statusId: ISSUE_STATUS.CLOSED, satisfaction: 'Satisfied' })], NOW),
+    engine.departmentScorecard(OTHER_DEPT, [], NOW),
   ];
   const p = engine.statePulse(cards);
   assert.equal(p.departmentsTotal, 2);

@@ -16,42 +16,71 @@ const zoho = require('./zoho-client');
 const engine = require('./engine');
 const auth = require('./auth');
 const { DEMO_COMPLAINTS } = require('./seed');
+const { resolveDepartments } = require('./resolve-departments');
 
-const { DEPARTMENTS, MODULES, ISSUE_STATUS, SEVERITY, ISSUE_FIELDS, DIRECTIVE_FIELDS, FEEDBACK_FIELDS } = schema;
+const { DEPARTMENTS, OFFICERS, MODULES, ISSUE_STATUS, SEVERITY, ISSUE_FIELDS, DIRECTIVE_FIELDS, FEEDBACK_FIELDS } = schema;
 
 /* ------------------------------------------------------------------ *
  * Read-through cache
  * ------------------------------------------------------------------ */
 
-const CACHE_TTL_MS = 30000;
+// 38 departments means 38 project reads. A longer window and a bounded pool are
+// what make that survivable; the reference Catalyst build hit cold-start 502s
+// with only nine parallel reads.
+const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 120000);
+const READ_CONCURRENCY = Number(process.env.READ_CONCURRENCY || 6);
+
 let cache = { at: 0, complaints: null };
-
-async function loadAllComplaints({ force = false } = {}) {
-  if (!force && cache.complaints && Date.now() - cache.at < CACHE_TTL_MS) {
-    return { complaints: cache.complaints, cachedAt: new Date(cache.at).toISOString(), fromCache: true };
-  }
-
-  const results = await Promise.all(
-    DEPARTMENTS.map(async (dept) => {
-      try {
-        const issues = await zoho.listIssues(dept.id);
-        return issues.map((i) => engine.normalizeComplaint(i, dept));
-      } catch (err) {
-        // A department that cannot be read is a DATA GAP, never a zero.
-        return { __error: true, departmentId: dept.id, message: err.message };
+/** Run an async worker over items with a hard concurrency ceiling. */
+async function pool(items, limit, worker) {
+  const out = [];
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length) {
+        const idx = i++;
+        out[idx] = await worker(items[idx], idx);
       }
     })
   );
+  return out;
+}
+
+async function loadAllComplaints({ force = false } = {}) {
+  if (!force && cache.complaints && Date.now() - cache.at < CACHE_TTL_MS) {
+    return {
+      complaints: cache.complaints, departments: cache.departments,
+      gaps: cache.gaps, cachedAt: new Date(cache.at).toISOString(), fromCache: true,
+    };
+  }
+
+  const departments = await resolveDepartments(zoho);
+  const readable = departments.filter((d) => d.id);
+
+  const results = await pool(readable, READ_CONCURRENCY, async (dept) => {
+    try {
+      const issues = await zoho.listIssues(dept.id);
+      return issues.map((i) => engine.normalizeComplaint(i, dept));
+    } catch (err) {
+      // A department that cannot be read is a DATA GAP, never a zero.
+      return { __error: true, departmentId: dept.id, department: dept.name, message: err.message };
+    }
+  });
 
   const complaints = [];
   const gaps = [];
-  for (const r of results) {
-    if (Array.isArray(r)) complaints.push(...r);
-    else gaps.push(r);
+  for (const res of results) {
+    if (Array.isArray(res)) complaints.push(...res);
+    else gaps.push(res);
   }
 
-  cache = { at: Date.now(), complaints, gaps };
-  return { complaints, gaps, cachedAt: new Date(cache.at).toISOString(), fromCache: false };
+  // Departments with no Zoho project yet are also gaps — reported, not hidden.
+  departments
+    .filter((d) => !d.id)
+    .forEach((d) => gaps.push({ department: d.name, message: 'No Zoho project provisioned' }));
+
+  cache = { at: Date.now(), complaints, departments, gaps };
+  return { complaints, departments, gaps, cachedAt: new Date(cache.at).toISOString(), fromCache: false };
 }
 
 function invalidateCache() {
@@ -148,16 +177,46 @@ function principal(req) {
   return token ? auth.verify(token) : null;
 }
 
+/** Looks in the resolved set first, so runtime-discovered IDs are found. */
 function departmentById(id) {
-  return DEPARTMENTS.find((d) => d.id === String(id)) || null;
+  const key = String(id);
+  const resolved = cache.departments || DEPARTMENTS;
+  return resolved.find((d) => d.id === key) || DEPARTMENTS.find((d) => d.id === key) || null;
 }
 
 function accountabilityFor(department) {
   if (!department) return null;
+  const c = department.contacts || {};
   return {
-    political: { role: 'Minister', holder: department.minister },
-    administrative: { role: 'Principal Secretary', holder: department.secretary },
-    note: 'Political and administrative accountability are shown separately and are never collapsed into one person.',
+    political: {
+      role: 'Minister',
+      holder: department.minister,
+      phone: c.ministerOffice ? c.ministerOffice.phone : null,
+    },
+    administrative: {
+      role: 'Principal Secretary',
+      holder: department.secretary,
+      phone: c.secretary ? c.secretary.phone : null,
+    },
+    controlRoom: c.controlRoom || null,
+    note:
+      'Political and administrative accountability are shown separately and are never collapsed '
+      + 'into one person. The Minister entry is the office, not a named individual. Numbers are '
+      + 'non-dialable placeholders.',
+  };
+}
+
+/** Phone and designation for the officer holding a complaint. */
+function officerContact(assignee) {
+  if (!assignee || !assignee.email) return null;
+  const roster = OFFICERS.find((o) => o.email.toLowerCase() === String(assignee.email).toLowerCase());
+  return {
+    name: assignee.name,
+    designation: assignee.designation || (roster ? roster.designation : null),
+    district: roster ? roster.district : null,
+    phone: roster ? roster.phone : null,
+    officePhone: roster ? roster.officePhone : null,
+    email: assignee.email,
   };
 }
 
@@ -196,10 +255,16 @@ route('GET', /^\/auth\/me$/, 'complaint:read', async (ctx) =>
 
 // --- command centre ---------------------------------------------------
 route('GET', /^\/dashboard$/, 'department:read', async (ctx) => {
-  const { complaints, gaps, cachedAt } = await loadAllComplaints();
+  const { complaints, gaps, cachedAt, departments } = await loadAllComplaints();
   const now = new Date();
 
-  const visibleDepartments = auth.scopedDepartments(ctx.claims, DEPARTMENTS);
+  // Only departments with a project and at least one complaint are scored; the
+  // rest are reported under freshness as data gaps rather than dragging the
+  // pulse down with thirty empty scorecards.
+  const withData = new Set(complaints.map((c) => c.departmentId));
+  const visibleDepartments = auth
+    .scopedDepartments(ctx.claims, departments)
+    .filter((d) => d.id && withData.has(d.id));
   const visibleIds = new Set(visibleDepartments.map((d) => d.id));
   const visible = complaints.filter((c) => visibleIds.has(c.departmentId));
 
@@ -243,7 +308,7 @@ route('GET', /^\/complaints$/, 'complaint:read', async (ctx) => {
   const now = new Date();
   const q = ctx.query;
 
-  let list = complaints.filter((c) => auth.inScope(ctx.claims, c.departmentId));
+  let list = complaints.filter((c) => auth.inScope(ctx.claims, c.departmentKey));
 
   if (q.departmentId) list = list.filter((c) => c.departmentId === q.departmentId);
   if (q.district) list = list.filter((c) => c.district === q.district);
@@ -271,7 +336,7 @@ route('GET', /^\/complaints\/([^/]+)$/, 'complaint:read', async (ctx) => {
   const { complaints } = await loadAllComplaints();
   const complaint = complaints.find((c) => c.id === id);
   if (!complaint) return fail(ctx.res, 404, 'NOT_FOUND', 'Complaint not found.');
-  if (!auth.inScope(ctx.claims, complaint.departmentId))
+  if (!auth.inScope(ctx.claims, complaint.departmentKey))
     return fail(ctx.res, 403, 'FORBIDDEN', 'This complaint is outside your authorised scope.');
 
   const now = new Date();
@@ -287,6 +352,12 @@ route('GET', /^\/complaints\/([^/]+)$/, 'complaint:read', async (ctx) => {
   return send(ctx.res, 200, {
     complaint: { ...complaint, sla: engine.slaState(complaint, now) },
     accountability: accountabilityFor(dept),
+    // Who to ring about this specific complaint, without leaving the screen.
+    contact: {
+      officer: officerContact(complaint.assignee),
+      controlRoom: dept && dept.contacts ? dept.contacts.controlRoom : null,
+      secretary: dept && dept.contacts ? dept.contacts.secretary : null,
+    },
     classification: {
       department: complaint.departmentName,
       category: complaint.category,
@@ -310,9 +381,27 @@ route('POST', /^\/complaints$/, 'complaint:read', async (ctx) => {
     return fail(ctx.res, 400, 'BAD_REQUEST', 'A complaint title of at least 8 characters is required.');
 
   const classification = engine.classify(title, description);
+
+  // Route to a department that actually has a Zoho project. The static registry
+  // carries no project IDs by design, so resolving is mandatory — writing to
+  // `/projects/null/issues` is the failure this guards against.
+  const { departments } = await loadAllComplaints();
+  const readable = departments.filter((d) => d.id);
+
   const dept =
-    DEPARTMENTS.find((d) => d.name === classification.department) ||
-    DEPARTMENTS.find((d) => d.short === 'Municipal & Water');
+    readable.find((d) => d.name === classification.department) ||
+    readable.find((d) => d.short === 'Municipal & Water') ||
+    readable[0];
+
+  if (!dept) {
+    return fail(
+      ctx.res,
+      503,
+      'NO_PROVISIONED_DEPARTMENT',
+      'No department has a Zoho project yet, so there is nowhere to file this complaint. '
+      + 'Run the seeder to provision the departments.'
+    );
+  }
 
   const severityId =
     { Showstopper: SEVERITY.SHOWSTOPPER, Critical: SEVERITY.CRITICAL, Major: SEVERITY.MAJOR, Minor: SEVERITY.MINOR }[
@@ -363,7 +452,7 @@ route('POST', /^\/complaints\/([^/]+)\/status$/, 'complaint:update', async (ctx)
   const { complaints } = await loadAllComplaints();
   const complaint = complaints.find((c) => c.id === id);
   if (!complaint) return fail(ctx.res, 404, 'NOT_FOUND', 'Complaint not found.');
-  if (!auth.inScope(ctx.claims, complaint.departmentId))
+  if (!auth.inScope(ctx.claims, complaint.departmentKey))
     return fail(ctx.res, 403, 'FORBIDDEN', 'Outside your authorised scope.');
 
   // A department cannot close a complaint the citizen has not accepted.
@@ -418,10 +507,105 @@ route('POST', /^\/complaints\/([^/]+)\/feedback$/, 'complaint:read', async (ctx)
   });
 });
 
+// --- monthly performance and the department award ---------------------
+route('GET', /^\/dashboard\/monthly$/, 'department:read', async (ctx) => {
+  const { complaints, departments, cachedAt } = await loadAllComplaints();
+  const months = Math.min(Math.max(Number(ctx.query.months) || 6, 1), 12);
+
+  const scoped = auth.scopedDepartments(ctx.claims, departments).filter((d) => d.id);
+  const scopedIds = new Set(scoped.map((d) => d.id));
+  const visible = complaints.filter((c) => scopedIds.has(c.departmentId));
+
+  const report = engine.monthlyPerformance(scoped, visible, new Date(), { months });
+
+  return send(ctx.res, 200, {
+    ...report,
+    note:
+      'Each month is scored on the complaints reported in it, with SLA state evaluated at '
+      + 'the end of that month — so a department is judged on the month it actually had, not on '
+      + 'how much time has passed since.',
+    freshness: { source: 'Zoho Projects', lastUpdated: cachedAt, state: 'FRESH' },
+  });
+});
+
+// --- contact directory ------------------------------------------------
+/**
+ * Who to call, for the Chief Minister.
+ *
+ * Every number here is a non-dialable placeholder: Indian mobile numbers begin
+ * 6–9, and each of these begins with 5, so none can connect to a real person.
+ */
+route('GET', /^\/contacts$/, 'department:read', async (ctx) => {
+  const { complaints, departments } = await loadAllComplaints();
+  const now = new Date();
+
+  const scoped = auth.scopedDepartments(ctx.claims, departments);
+  const filtered = ctx.query.departmentId
+    ? scoped.filter((d) => d.id === ctx.query.departmentId)
+    : scoped;
+
+  const q = String(ctx.query.q || '').toLowerCase();
+
+  const directory = filtered
+    .map((dept) => {
+      const rows = complaints.filter((c) => c.departmentId === dept.id);
+      const breached = rows.filter((c) => engine.slaState(c, now).state === 'BREACHED').length;
+
+      // Officers actually holding complaints in this department, with load.
+      const officerMap = new Map();
+      rows.forEach((c) => {
+        if (!c.assignee || !c.assignee.email) return;
+        const cur = officerMap.get(c.assignee.email) || {
+          name: c.assignee.name, designation: c.assignee.designation,
+          email: c.assignee.email, open: 0, breached: 0,
+        };
+        if (!c.isClosed) cur.open += 1;
+        if (engine.slaState(c, now).state === 'BREACHED') cur.breached += 1;
+        officerMap.set(c.assignee.email, cur);
+      });
+
+      const officers = [...officerMap.values()]
+        .map((o) => {
+          const roster = OFFICERS.find((x) => x.email.toLowerCase() === o.email.toLowerCase());
+          return { ...o, phone: roster ? roster.phone : null, officePhone: roster ? roster.officePhone : null,
+            district: roster ? roster.district : null };
+        })
+        .sort((a, b) => b.breached - a.breached || b.open - a.open);
+
+      return {
+        departmentId: dept.id,
+        department: dept.name,
+        short: dept.short,
+        tier: dept.tier,
+        complaints: rows.length,
+        breached,
+        escalationPath: [
+          dept.contacts.controlRoom,
+          dept.contacts.secretary,
+          dept.contacts.ministerOffice,
+        ],
+        officers,
+      };
+    })
+    .filter((d) => !q
+      || d.department.toLowerCase().includes(q)
+      || d.officers.some((o) => (o.name || '').toLowerCase().includes(q)));
+
+  return send(ctx.res, 200, {
+    data: directory.sort((a, b) => b.breached - a.breached || b.complaints - a.complaints),
+    guidance:
+      'Escalate in order: departmental control room, then Principal Secretary, then the '
+      + 'Minister’s office. Contact the assigned officer directly for the status of a single complaint.',
+    disclaimer:
+      'DEMO DATA. Every number shown is a non-dialable placeholder — Indian mobile numbers '
+      + 'begin 6–9 and these begin with 5, so none can reach a real person.',
+  });
+});
+
 // --- red flags --------------------------------------------------------
 route('GET', /^\/red-flags$/, 'redflag:read', async (ctx) => {
   const { complaints } = await loadAllComplaints();
-  const visible = complaints.filter((c) => auth.inScope(ctx.claims, c.departmentId));
+  const visible = complaints.filter((c) => auth.inScope(ctx.claims, c.departmentKey));
   const flags = engine.redFlags(visible, new Date()).map((f) => ({
     ...f,
     accountability: { ...f.accountability, ...accountabilityFor(departmentById(f.departmentId)) },
@@ -489,10 +673,11 @@ route('POST', /^\/directives$/, 'directive:issue', async (ctx) => {
 
 // --- demo data seeding ------------------------------------------------
 route('POST', /^\/admin\/seed$/, 'directive:issue', async (ctx) => {
+  const { departments: seedDepartments } = await loadAllComplaints();
   const created = [];
   const failed = [];
   for (const spec of DEMO_COMPLAINTS) {
-    const dept = DEPARTMENTS.find((d) => d.short === spec.dept);
+    const dept = seedDepartments.find((d) => d.short === spec.dept && d.id);
     if (!dept) continue;
     try {
       const issue = await zoho.createIssue(dept.id, {
