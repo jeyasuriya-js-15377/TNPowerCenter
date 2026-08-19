@@ -1,7 +1,7 @@
 {
   "name": "tnpc_api",
   "version": "1.0.0",
-  "description": "Tamil Nadu Power Center — Catalyst Advanced I/O function. Reads and writes Zoho Projects; holds no database of its own.",
+  "description": "Tamil Nadu Power Center API function. Holds no database of its own.",
   "main": "index.js",
   "dependencies": {},
   "license": "UNLICENSED"

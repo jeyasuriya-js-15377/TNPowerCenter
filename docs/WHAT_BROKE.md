@@ -62,7 +62,7 @@ all on private copies and you are editing a template nobody reads.
 **Cost: ~20 minutes, plus a design change that turned out to be an improvement.**
 
 Seeding a realistic demo needs history: complaints reported nine days ago,
-already past their deadline. Zoho refuses:
+already past their deadline. the portal refuses:
 
 ```json
 {"message":"The Due Date cannot preceed the Created Time","field_name":"due_date"}
@@ -76,9 +76,9 @@ past deadline.
 fields and made those authoritative. The native `due_date` is left unused.
 
 This is one of those constraints that pushes you somewhere better. The product
-spec already said *"do not rely entirely on Zoho for SLA intelligence — Power
+spec already said *"do not rely entirely on the portal for SLA intelligence — Power
 Center owns the executive SLA engine."* The API forced me to actually build it
-that way instead of leaning on a Zoho field. The SLA engine is now a pure
+that way instead of leaning on a portal field. The SLA engine is now a pure
 function with its own policy table, and it is the part of the system with the
 best test coverage.
 
@@ -175,9 +175,9 @@ signing, `node:test` for the test suite, and a no-build ES-module client.
 
 I expected this to be a compromise. It mostly was not. The function deploys with
 an empty `dependencies` block, there is no build step to break between local and
-Catalyst, and cold starts are as small as they can be. The real cost is the
+the platform, and cold starts are as small as they can be. The real cost is the
 hand-rolled JWT and password comparison in `auth.js`, which is fine for a demo
-and must be replaced by Catalyst Authentication before this is anything else.
+and must be replaced by platform authentication before this is anything else.
 That is flagged in the code, not buried here.
 
 ---
@@ -187,7 +187,7 @@ That is flagged in the code, not buried here.
 - **Custom fields round-trip cleanly through the MCP server.** Passing
   `citizen_ref`, `district`, `sentiment` and the rest straight in the issue body
   worked first time and came back in the response. Discovering that early was
-  what made the Zoho-as-database design viable.
+  what made the portal-as-database design viable.
 - **Native issue statuses map onto a complaint lifecycle with no configuration.**
   `Open → InProgress → ToBeTested → Closed`, plus `Reopen`, is exactly
   *received → in progress → awaiting citizen validation → closed*, with reopen

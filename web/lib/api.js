@@ -1,20 +1,10 @@
 /**
- * Client for the Catalyst Advanced I/O function.
+ * Browser client for the API.
  *
- * The function is served from the same origin at /server/tnpc_api, so the base
- * is relative by default. Override at build time with NEXT_PUBLIC_API_BASE if
- * the client is hosted somewhere else — CORS is already permitted server-side.
- */
-
-/**
- * Where the browser sends API calls.
+ * Default `/api` is the Next.js proxy route, which forwards server-side to the
+ * function. That keeps every request same-origin.
  *
- * Default `/api` is the Next.js proxy route in app/api/[...path]/route.js, which
- * forwards server-side to the Catalyst function. That keeps every request
- * same-origin: no CORS, and the function's URL is a server env var rather than
- * something compiled into this bundle.
- *
- * Set NEXT_PUBLIC_API_BASE to an absolute function URL when building a STATIC
+ * Set NEXT_PUBLIC_API_BASE to an absolute function URL when building a static
  * export, which has no server and therefore no proxy.
  */
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api';
@@ -66,9 +56,8 @@ export async function api(path, options = {}) {
     method,
     headers: {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
-      // X-App-Token, never Authorization: Catalyst validates any
-      // `Authorization: Bearer …` sent to an AdvancedIO function as one of its
-      // own OAuth tokens and returns 401 before our handler runs.
+      // Session lives in X-App-Token. Do not send Authorization: Bearer —
+      // the host platform treats that as its own token and rejects the call.
       ...(token ? { 'X-App-Token': token } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

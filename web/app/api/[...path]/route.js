@@ -1,18 +1,9 @@
 /**
- * Server-side proxy to the Catalyst Advanced I/O function.
+ * Server-side proxy to the API function.
  *
- * Why this exists: Slate serves the UI from *.onslate.in while the function runs
- * on *.catalystserverless.in. Calling the function directly from the browser
- * makes every request cross-origin, which means a CORS whitelist plus an absolute
- * API URL compiled into the bundle — and a rebuild whenever that URL changes.
- *
- * Proxying through a Next.js route instead means the browser only ever talks to
- * its own origin. The function URL becomes a server-side environment variable,
- * so it can change without rebuilding the client, and no CORS configuration is
- * needed at all.
- *
- * Zoho Projects remains the system of record and the Catalyst function remains
- * the backend — this forwards, it does not implement anything.
+ * The UI and the API function are hosted on different origins. Calling the
+ * function from the browser would be cross-origin. This route forwards on the
+ * server so the browser only talks to its own origin.
  *
  * Requires the Next.js hosting mode. A static export has no server, so in that
  * mode this file is not built and the client must use an absolute
@@ -38,8 +29,8 @@ async function proxy(request, context) {
         error: {
           code: 'API_URL_NOT_CONFIGURED',
           message:
-            'TNPC_API_URL is not set on the deployment. Point it at the Catalyst '
-            + 'function, e.g. https://<project>.development.catalystserverless.in/server/tnpc_api',
+            'TNPC_API_URL is not set on the deployment. Point it at the API '
+            + 'function, ending in /server/tnpc_api',
         },
       },
       { status: 503 }
@@ -73,7 +64,7 @@ async function proxy(request, context) {
       {
         error: {
           code: 'UPSTREAM_UNREACHABLE',
-          message: `Could not reach the Catalyst function: ${err.message}`,
+          message: `Could not reach the API function: ${err.message}`,
           target,
         },
       },

@@ -1,6 +1,7 @@
 'use client';
 
 import { humanise } from '@/lib/format';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const VIEWS = [
   { key: 'command', label: 'Command Center' },
@@ -18,7 +19,7 @@ export default function TopBar({ user, view, onView, onRefresh, onSignOut, busy 
         <div className="brand-mark" />
         <div>
           <strong>Tamil Nadu Power Center</strong>
-          <span className="backbone">Zoho Projects backbone</span>
+          <span className="backbone">Government performance</span>
         </div>
       </div>
 
@@ -40,6 +41,7 @@ export default function TopBar({ user, view, onView, onRefresh, onSignOut, busy 
           <strong>{user.name}</strong>
           <span>{humanise(user.role)}</span>
         </div>
+        <ThemeToggle compact />
         <button type="button" className="btn ghost" onClick={onRefresh} disabled={busy}>
           {busy ? 'Reading…' : 'Refresh'}
         </button>

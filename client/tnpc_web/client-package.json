@@ -1,6 +1,6 @@
 {
   "name": "tnpc_web",
   "version": "1.0.0",
-  "description": "Tamil Nadu Power Center — CM Command Center. Static client for Catalyst Slate; no build step.",
+  "description": "Optional static-export target for Catalyst Client. The live UI is the Next.js app in web/, deployed to Slate.",
   "homepage": "/index.html"
 }

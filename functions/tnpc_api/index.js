@@ -77,7 +77,7 @@ async function loadAllComplaints({ force = false } = {}) {
   // Departments with no Zoho project yet are also gaps — reported, not hidden.
   departments
     .filter((d) => !d.id)
-    .forEach((d) => gaps.push({ department: d.name, message: 'No Zoho project provisioned' }));
+    .forEach((d) => gaps.push({ department: d.name, message: 'No department workspace provisioned' }));
 
   cache = { at: Date.now(), complaints, departments, gaps };
   return { complaints, departments, gaps, cachedAt: new Date(cache.at).toISOString(), fromCache: false };
@@ -233,10 +233,10 @@ route('GET', /^\/health$/, null, async (ctx) =>
   send(ctx.res, 200, {
     service: 'tn-power-center',
     status: 'ok',
-    backbone: 'Zoho Projects',
+    backbone: 'project portal',
     portalId: schema.PORTAL_ID,
     departments: DEPARTMENTS.length,
-    zohoConfigured: Boolean(process.env.ZOHO_REFRESH_TOKEN),
+    portalConfigured: Boolean(process.env.ZOHO_REFRESH_TOKEN),
     time: new Date().toISOString(),
   })
 );
@@ -291,7 +291,7 @@ route('GET', /^\/dashboard$/, 'department:read', async (ctx) => {
       awaitingCitizen: visible.filter((c) => c.statusKey === 'AWAITING_CITIZEN').length,
     },
     freshness: {
-      source: 'Zoho Projects',
+      source: 'project portal',
       lastUpdated: cachedAt,
       state: 'FRESH',
       dataGaps: (gaps || []).map((g) => ({ departmentId: g.departmentId, reason: g.message })),
@@ -398,7 +398,7 @@ route('POST', /^\/complaints$/, 'complaint:read', async (ctx) => {
       ctx.res,
       503,
       'NO_PROVISIONED_DEPARTMENT',
-      'No department has a Zoho project yet, so there is nowhere to file this complaint. '
+      'No department workspace has been provisioned yet, so there is nowhere to file this complaint. '
       + 'Run the seeder to provision the departments.'
     );
   }
@@ -524,7 +524,7 @@ route('GET', /^\/dashboard\/monthly$/, 'department:read', async (ctx) => {
       'Each month is scored on the complaints reported in it, with SLA state evaluated at '
       + 'the end of that month — so a department is judged on the month it actually had, not on '
       + 'how much time has passed since.',
-    freshness: { source: 'Zoho Projects', lastUpdated: cachedAt, state: 'FRESH' },
+    freshness: { source: 'project portal', lastUpdated: cachedAt, state: 'FRESH' },
   });
 });
 

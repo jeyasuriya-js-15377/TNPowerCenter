@@ -59,7 +59,7 @@ export default function Page() {
       try {
         const data = await request('/dashboard');
         setDashboard(data);
-        if (announce) notify('Updated from Zoho Projects.', 'ok');
+        if (announce) notify('Dashboard updated.', 'ok');
       } catch (err) {
         setDashError(err.message);
         notify(err.message, 'bad');

@@ -52,14 +52,14 @@ HMAC-SHA256 signed tokens via `node:crypto`, carrying `sub`, `role`,
 ## Secrets
 
 Nothing is committed. `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`,
-`ZOHO_REFRESH_TOKEN` and `AUTH_SIGNING_KEY` come from Catalyst environment
-variables. The client bundle contains no credential — every Zoho call goes
-through the function, and the browser never sees a Zoho token.
+`ZOHO_REFRESH_TOKEN` and `AUTH_SIGNING_KEY` come from function environment
+variables. The client bundle contains no credential — every portal call goes
+through the function, and the browser never sees a portal token.
 
 ## Input handling
 
 Every route validates what it reads and ignores what it does not expect.
-Identifiers are only ever used as path segments against the Zoho API, never
+Identifiers are only ever used as path segments against the portal API, never
 interpolated into a query language. Request bodies are capped at 256KB. All
 user-supplied strings are escaped on render (`esc()` in `app.js`); the client
 never uses `innerHTML` with unescaped input.
@@ -77,15 +77,15 @@ These are real and would need closing before this is anything more than a demo:
 
 1. **Hand-rolled auth.** Three accounts with in-source passwords and a
    hand-written token format, because no package registry was available in the
-   build environment. Replace with **Catalyst Authentication**, and require MFA
+   build environment. Replace with **platform authentication**, and require MFA
    for any account holding `directive:issue`.
 2. **No audit log.** Directive issuance returns an audit envelope in the
    response but does not persist an append-only record. A `cm_audit` custom
    module with hash-chained entries is the intended fix.
 3. **No rate limiting.** In-process token buckets on login and write endpoints
-   are the minimum; Catalyst API gateway rules are the better answer.
-4. **Single shared Zoho identity.** Every call uses the portal owner's refresh
-   token, so Zoho-side audit trails attribute all activity to one account.
-   Per-user OAuth would carry the acting officer's identity into Zoho.
+   are the minimum; platform API gateway rules are the better answer.
+4. **Single shared portal identity.** Every call uses the portal owner's refresh
+   token, so portal-side audit trails attribute all activity to one account.
+   Per-user OAuth would carry the acting officer's identity into the portal.
 5. **CORS is open** (`Access-Control-Allow-Origin: *`) to keep the demo
-   deployable from any Slate URL. Pin it to the deployed origin.
+   deployable from any public URL. Pin it to the deployed origin.

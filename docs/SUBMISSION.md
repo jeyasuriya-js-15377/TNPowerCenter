@@ -24,13 +24,13 @@ where is it failing, who is accountable, and did my intervention change
 anything?* Complaints sit in one system, department performance in spreadsheets,
 and executive decisions in files. The loop never closes.
 
-Tamil Nadu Power Center closes it, using Zoho Projects as the entire backbone.
-Each secretariat department is a Zoho Project. Each citizen complaint is a Zoho
-Issue. Officers are portal users, directives become real tasks. Districts,
+Tamil Nadu Power Center closes it, using the project portal as the entire backbone.
+Each secretariat department is a workspace. Each citizen complaint is an issue.
+Officers are portal users, directives become real tasks. Districts,
 directives and citizen validations are custom modules. There is no external
-database — every fact the app shows is a record in Zoho Projects.
+database — every fact the app shows is a record in the project portal.
 
-On top of that sits the layer Zoho does not provide: an SLA engine that warns
+On top of that sits the layer the portal does not provide: an SLA engine that warns
 before a breach rather than reporting it afterwards, a configurable department
 scorecard, and a red-flag engine that surfaces exceptions instead of statistics.
 The Chief Minister opens one screen and sees a State Pulse, then a short ranked
@@ -40,7 +40,7 @@ department's own resolutions.
 
 Three roles use it. The Chief Minister investigates a red flag and issues a
 directive, which writes a directive record and creates execution work in that
-department's Zoho project. The War Room analyst sees the identical statewide
+department's department workspace. The War Room analyst sees the identical statewide
 data and is refused when they attempt the same action — visibility and authority
 are separate, enforced server-side. A minister's control team sees one
 department only.
@@ -49,9 +49,9 @@ Two rules are non-negotiable in the code: a department cannot close a complaint
 the citizen has rejected, and missing data is reported as a DATA GAP, never
 scored as good performance.
 
-## Live Catalyst URL
+## Live app URL
 
-`[paste the Slate URL from `catalyst deploy`]`
+`[paste the hosted URL from the deploy output]`
 
 ## Demo login
 
@@ -71,14 +71,14 @@ Portal: `jeyasuriyadotjscmzohotestdotcom` (zohotest account, India DC).
 
 <https://github.com/[your-username]/TNPowerCenter>
 
-Worth pointing reviewers at `docs/WHAT_BROKE.md` — the Zoho Projects API
+Worth pointing reviewers at `docs/WHAT_BROKE.md` — the project portal API
 constraints documented there are the most reusable part of this build.
 
 ## Build time
 
 **Roughly 5 hours in one session**, including a full architecture pivot
 partway through — the first version used an external Postgres/SQLite store and
-had to be rebuilt onto Zoho Projects as the only system of record once the
+had to be rebuilt onto the project portal as the only system of record once the
 "no external DB" rule was applied. AI did the schema design, all MCP calls, the
 entire codebase and the test suite; the human decisions were the vertical, the
 data model shape, and what to cut when the deadline got close.

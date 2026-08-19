@@ -224,7 +224,7 @@ export default function CommandCenter({ dashboard, error, loading, openDrawer })
   if (!dashboard) {
     return (
       <section className="view">
-        <div className="skeleton">{loading ? 'Reading Zoho Projects…' : 'No data yet.'}</div>
+        <div className="skeleton">{loading ? 'Loading the command center…' : 'No data yet.'}</div>
       </section>
     );
   }

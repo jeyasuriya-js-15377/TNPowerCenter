@@ -73,7 +73,7 @@ function RedFlagBody({ flag, user, request, notify, openDrawer, refreshDashboard
         },
       });
       openDrawer({ kind: 'directiveIssued', data: result });
-      notify('Directive issued and pushed to Zoho Projects.', 'ok');
+      notify('Directive issued.', 'ok');
       refreshDashboard(false);
     } catch (err) {
       notify(err.message, 'bad');
@@ -173,7 +173,7 @@ function RedFlagBody({ flag, user, request, notify, openDrawer, refreshDashboard
             </button>
             <p className="muted" style={{ fontSize: 12, margin: 0 }}>
               This is a privileged, audited action. It creates a directive record and real execution
-              work in the department&apos;s Zoho project.
+              work in the responsible department.
             </p>
           </form>
         ) : (
@@ -195,8 +195,8 @@ function DirectiveIssuedBody({ result }) {
     <>
       <h2>Directive issued</h2>
       <div className="notice ok">
-        The directive is recorded in Zoho Projects and execution work has been created in the
-        department project.
+        The directive is recorded and execution work has been created in the
+        responsible department.
       </div>
       <div className="dsec">
         <dl className="kv">
@@ -206,7 +206,7 @@ function DirectiveIssuedBody({ result }) {
           <dd>{result.directive.department}</dd>
           <dt>Status</dt>
           <dd>{result.directive.status}</dd>
-          <dt>Zoho task</dt>
+          <dt>Execution task</dt>
           <dd>{result.execution.zohoTaskId || result.execution.detail}</dd>
           <dt>Issued by</dt>
           <dd>

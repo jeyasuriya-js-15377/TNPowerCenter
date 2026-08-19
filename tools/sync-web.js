@@ -1,15 +1,12 @@
 'use strict';
 
 /**
- * Copies the Next.js static export into the Catalyst client folder.
+ * Copies the Next.js static export into client/tnpc_web.
  *
- *   cd web && npm install && NEXT_PUBLIC_BASE_PATH=/app npm run build
+ *   cd web && npm install && NEXT_STATIC_EXPORT=true npm run build
  *   node tools/sync-web.js
  *
- * `client-package.json` is preserved — Catalyst needs it and it is not part of
- * the Next.js output. The previous vanilla client is kept untouched in
- * client/tnpc_web_vanilla/ as a fallback; if the export misbehaves you can copy
- * those three files back and deploy immediately.
+ * client-package.json is preserved — it is not part of the Next.js output.
  */
 
 const fs = require('node:fs');
@@ -37,7 +34,7 @@ function copyDir(from, to) {
   }
 }
 
-// Clear everything except the files Catalyst owns.
+// Clear everything except the files this folder must keep.
 let removed = 0;
 for (const entry of fs.readdirSync(TARGET, { withFileTypes: true })) {
   if (PRESERVE.has(entry.name)) continue;
@@ -58,7 +55,7 @@ console.log(`  ${removed} old entr${removed === 1 ? 'y' : 'ies'} cleared, ${coun
 
 if (!fs.existsSync(path.join(TARGET, 'index.html'))) {
   console.log(`\n  WARNING: no index.html at the root of the export.`);
-  console.log(`  Catalyst Slate serves index.html — check your Next.js build output.\n`);
+  console.log(`  Check that the export produced index.html at the folder root.\n`);
 } else {
   console.log(`\n  Ready: catalyst deploy\n`);
 }

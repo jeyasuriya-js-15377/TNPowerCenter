@@ -2,7 +2,7 @@
   "name": "tnpc-web",
   "version": "1.0.0",
   "private": true,
-  "description": "Tamil Nadu Power Center — CM Command Center. Next.js App Router, statically exported for Catalyst Slate.",
+  "description": "Tamil Nadu Power Center — CM Command Center. Next.js App Router.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",

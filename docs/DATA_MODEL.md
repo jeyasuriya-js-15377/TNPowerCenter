@@ -1,7 +1,7 @@
 # Data model
 
-Zoho Projects is the only system of record. Everything below is a real Zoho
-object. The authoritative ID map is `functions/tnpc_api/zoho-schema.js`.
+The project portal is the only system of record. Everything below is a real
+portal object. The authoritative ID map is `functions/tnpc_api/zoho-schema.js`.
 
 Portal: `60083686827` (`jeyasuriyadotjscmzohotestdotcom`, India DC).
 
@@ -28,7 +28,7 @@ work in the responsible department" a single API call.
 Native fields carry most of it. **Status is the complaint lifecycle** — chosen so
 that no status configuration was needed:
 
-| Zoho status | Lifecycle meaning |
+| Portal status | Lifecycle meaning |
 |---|---|
 | `Open` | Received / routed / assigned |
 | `InProgress` | Officer working |
@@ -59,9 +59,9 @@ citizen validation*.
 | `ai_confidence` | Classifier confidence 0–1; gates routing autonomy |
 | `citizen_satisfaction` | `Pending` / `Satisfied` / `Unsatisfied` |
 | `sla_due` | **Authoritative** SLA deadline, owned by Power Center |
-| `reported_at` | Real-world report time; may precede Zoho `created_time` |
+| `reported_at` | Real-world report time; may precede portal `created_time` |
 
-> The last two exist because Zoho's native `due_date` rejects any value earlier
+> The last two exist because the portal's native `due_date` rejects any value earlier
 > than `created_time`, making it unusable for seeded or migrated history.
 > See `docs/WHAT_BROKE.md`.
 
@@ -90,7 +90,7 @@ Seeded: Chennai, Tiruvallur, Coimbatore, Madurai, Salem, Thanjavur.
 | API name | Field |
 |---|---|
 | `objective` | What the directive must achieve |
-| `cm_directive_cf_0001` | Department *(Zoho assigned this name, not me — see WHAT_BROKE §4)* |
+| `cm_directive_cf_0001` | Department *(the portal assigned this name, not me — see WHAT_BROKE §4)* |
 | `accountable_authority` | Officer accountable at the time of issuance |
 | `deadline` | Target completion date |
 | `directive_status` | `DRAFT / ISSUED / IN_EXECUTION / AT_RISK / COMPLETED / VERIFIED` |

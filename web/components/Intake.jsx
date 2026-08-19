@@ -38,8 +38,8 @@ export default function Intake({ request, notify, refreshDashboard }) {
         <form className="card" onSubmit={submit}>
           <h2>File a citizen complaint</h2>
           <p className="muted">
-            Submitted complaints are classified, routed and given an SLA deadline, then written to
-            Zoho Projects as an issue in the responsible department&apos;s project.
+            Submitted complaints are classified, routed and given an SLA deadline, then filed
+            against the responsible department.
           </p>
 
           <label>
@@ -103,7 +103,7 @@ function IntakeResult({ result }) {
   return (
     <>
       <div className="notice ok">
-        Complaint <b>{result.complaint.key || result.complaint.id}</b> created in Zoho Projects.
+        Complaint <b>{result.complaint.key || result.complaint.id}</b> filed and routed.
       </div>
 
       <dl className="kv">

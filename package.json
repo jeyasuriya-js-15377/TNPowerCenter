@@ -2,10 +2,10 @@
   "name": "tamil-nadu-power-center",
   "version": "1.0.0",
   "private": true,
-  "description": "Tamil Nadu Power Center — an executive operating system for government performance, running entirely on Zoho Projects and deployed on Zoho Catalyst.",
+  "description": "Tamil Nadu Power Center — an executive operating system for government performance.",
   "scripts": {
     "test": "node --test tests/engine.test.js",
-    "check": "node --check functions/tnpc_api/index.js && node --check functions/tnpc_api/engine.js && node --check functions/tnpc_api/auth.js && node --check functions/tnpc_api/zoho-client.js && node --check functions/tnpc_api/seed.js && node --check functions/tnpc_api/zoho-schema.js && node --check tools/local-server.js && node --check tools/verify-zoho.js && node --check tools/sync-web.js && echo \"backend files parse\"",
+    "check": "node --check functions/tnpc_api/index.js && node --check functions/tnpc_api/engine.js && node --check functions/tnpc_api/auth.js && node --check functions/tnpc_api/zoho-client.js && node --check functions/tnpc_api/seed.js && node --check functions/tnpc_api/zoho-schema.js && node --check functions/tnpc_api/government-registry.js && node --check functions/tnpc_api/resolve-departments.js && node --check tools/local-server.js && node --check tools/verify-zoho.js && node --check tools/sync-web.js && echo \"backend files parse\"",
     "start": "node tools/local-server.js",
     "verify:zoho": "node tools/verify-zoho.js",
     "verify:zoho:write": "node tools/verify-zoho.js --write",
@@ -21,7 +21,6 @@
     "web:build:root": "cd web && npm run build",
     "web:sync": "node tools/sync-web.js",
     "web:package": "node tools/package-web.js",
-    "web:vanilla": "node tools/package-vanilla.js",
     "web:ship": "npm run web:build:root && npm run web:sync && npm run web:package"
   },
   "engines": {

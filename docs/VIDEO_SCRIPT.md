@@ -3,9 +3,9 @@
 Record at 1440×900 or larger. Zoom the browser to ~110% so text is legible.
 Have **three tabs open before you hit record**:
 
-1. The Slate app, signed out
-2. Zoho Projects → Municipal Administration & Water Supply → Issues
-3. Zoho Projects → Settings → Modules (showing the four custom modules)
+1. The app, signed out
+2. the project portal → Municipal Administration & Water Supply → Issues
+3. the project portal → Settings → Modules (showing the four custom modules)
 
 Rehearse once. The timings below leave ~20 seconds of slack.
 
@@ -20,19 +20,19 @@ Rehearse once. The timings below leave ~20 seconds of slack.
 > and the decisions are in files. The loop never closes.
 >
 > This is Tamil Nadu Power Center. It closes that loop, and it runs entirely on
-> Zoho Projects."
+> the project portal."
 
 *On screen: the login page.*
 
 ---
 
-## 0:30 — 1:00 · Zoho Projects is the database
+## 0:30 — 1:00 · the project portal is the database
 
 Switch to tab 3 (Modules), then tab 2 (Issues).
 
-> "There's no database behind this. Every department is a Zoho Project. Every
-> citizen complaint is a Zoho Issue — here's the water department, with the
-> custom fields Claude created through the Zoho Projects MCP server: citizen
+> "There's no database behind this. Every department is a department workspace. Every
+> citizen complaint is a complaint record — here's the water department, with the
+> custom fields Claude created through the portal API: citizen
 > reference, district, category, sentiment, classifier confidence, the SLA
 > deadline, and whether the citizen accepted the resolution.
 >
@@ -52,7 +52,7 @@ Back to tab 1. Sign in as **cm@tnpowercenter.in**.
 Point at the State Pulse.
 
 > "State Pulse, and what's driving it — citizen outcome, complaint performance,
-> SLA, risk. Every number is computed live from Zoho Projects records.
+> SLA, risk. Every number is computed live from the project portal records.
 >
 > Underneath is the part that matters: **Requires CM attention**. Not a feed of
 > everything — exceptions only, ranked by attention score."
@@ -91,7 +91,7 @@ Fill the directive form and submit.
 Switch to tab 2, refresh the Municipal project → Tasks.
 
 > "It's not a PDF. The directive is recorded in the CM Directives module, and a
-> real task lands in the water department's Zoho project with the accountable
+> real task lands in the water department's department workspace with the accountable
 > officer and the deadline. Execution and oversight are the same system."
 
 ---
@@ -125,7 +125,7 @@ Type: *"No water supply for six days, tanker never arrived"*, district
 Tiruvallur. Submit.
 
 > "Classified, routed to Municipal and Water, priority set, SLA deadline
-> calculated, and written to Zoho Projects as an issue. And it shows *why* — the
+> calculated, and written to the project portal as an issue. And it shows *why* — the
 > matched terms, the urgency signals, the confidence. Below the confidence
 > threshold it goes to a human instead of guessing."
 
@@ -144,9 +144,9 @@ Return to the Command Center — the numbers have moved.
 
 ## 4:45 — 5:00 · Close
 
-> "Observe, understand, account, decide, direct, execute, verify. On Zoho
-> Projects as the system of record, Catalyst for hosting and serverless, and
-> built with Claude through the Zoho Projects MCP server.
+> "Observe, understand, account, decide, direct, execute, verify. The project
+> portal is the system of record; this app is the executive layer.
+> Built with Claude through the portal API.
 >
 > Everything you saw is clearly-labelled demo data."
 
@@ -158,5 +158,5 @@ Return to the Command Center — the numbers have moved.
 - [ ] No directives exist yet, so issuing one on camera is visibly new
 - [ ] At least one complaint sits in *awaiting citizen validation*
 - [ ] Browser zoom ~110%, notifications off, bookmarks bar hidden
-- [ ] You are signed into Zoho Projects in a second tab already
+- [ ] You are signed into the project portal in a second tab already
 - [ ] Under 5:00 — it is a hard cap

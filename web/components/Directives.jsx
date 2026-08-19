@@ -28,8 +28,8 @@ export default function Directives({ request, notify }) {
       <h2 className="section-head">
         CM directives
         <span className="hint">
-          A directive is an executable object — issuing one creates real work in the department&apos;s
-          Zoho project
+          A directive is an executable object — issuing one creates real work in the
+          responsible department
         </span>
       </h2>
 

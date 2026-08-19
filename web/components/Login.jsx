@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const DEMO_ACCOUNTS = [
   {
@@ -49,6 +50,9 @@ export default function Login({ onSignedIn }) {
 
   return (
     <div className="login-shell">
+      <div className="login-theme">
+        <ThemeToggle />
+      </div>
       <div className="login-card">
         <div className="brand">
           <div className="brand-mark" />
@@ -106,7 +110,7 @@ export default function Login({ onSignedIn }) {
         </div>
 
         <p className="footnote">
-          All data shown is clearly-labelled synthetic <b>DEMO DATA</b> held in Zoho Projects.
+          All data shown is clearly-labelled synthetic <b>DEMO DATA</b>.
         </p>
       </div>
     </div>

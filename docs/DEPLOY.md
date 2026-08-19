@@ -1,14 +1,14 @@
 # Deploying Tamil Nadu Power Center
 
-Two things must happen: Zoho Projects has to trust the app (OAuth), and the app
-has to get onto Catalyst. Do them in that order — you can verify step 1 locally
-before touching Catalyst at all.
+Two things must happen: the project portal has to trust the app (OAuth), and the
+app has to be hosted. Do them in that order — you can verify step 1 locally
+before touching the host at all.
 
 Total time if nothing fights you: about 25 minutes.
 
 ---
 
-## Step 1 — Get a Zoho Projects refresh token
+## Step 1 — Get a portal refresh token
 
 The portal is on the **India** data centre (`projects.zoho.in`), so use the
 India API console. Using the `.com` console is the single most common cause of
@@ -64,7 +64,7 @@ an `invalid_client` error.
 ## Step 2 — Verify locally before deploying
 
 This runs the identical function handler behind the identical URL path, so a
-green run here means the Catalyst deploy is about configuration only.
+green run here means the hosted deploy is about configuration only.
 
 ```bash
 cd ~/zoho-workspace/TNPowerCenter
@@ -72,7 +72,7 @@ cd ~/zoho-workspace/TNPowerCenter
 # logic tests — no credentials needed
 npm test          # expect: 21 pass, 0 fail
 
-# full app against live Zoho Projects
+# full app against live the project portal
 ZOHO_CLIENT_ID=xxx \
 ZOHO_CLIENT_SECRET=xxx \
 ZOHO_REFRESH_TOKEN=xxx \
@@ -99,108 +99,41 @@ Run this **once**. Running it twice creates duplicates.
 
 ---
 
-## Step 3 — Deploy to Catalyst
+## Step 3 — Deploy the app
 
-Let the CLI generate the project scaffolding, then drop these folders in. That
-avoids any mismatch between my hand-written config and your CLI version.
+This repo is already linked. From the project root, with `zcatalyst-cli` logged
+in to the **India** DC (`catalyst login --dc in`):
 
 ```bash
 npm install -g zcatalyst-cli
-catalyst login          # use the same Zoho account
+catalyst login --dc in
+catalyst project:use 48567000000013058 --dc in --org 60083738829
 ```
 
-**Create the project scaffold in a scratch directory:**
+[`catalyst.json`](../catalyst.json) already names the function `tnpc_api` and
+the hosted UI `tnpc-web` (source: `web/`, framework Next.js). Do **not** run
+`catalyst init` here — it will drop a boilerplate over `web/`.
 
-```bash
-mkdir ~/tnpc-deploy && cd ~/tnpc-deploy
-catalyst init
-#   → Create a new project   → name it: TNPowerCenter
-#   → select BOTH: Functions and Client
-#   Functions: type "Advanced I/O", stack "Node", name it exactly  tnpc_api
-#   Client:    name it exactly  tnpc_web
-```
-
-### Slate and the function are on different domains
-
-This is the single most important thing to internalise before building the
-client:
+### UI and function are on different domains
 
 ```
-UI        https://<something>.onslate.in                    ← Catalyst Slate
-API       https://<project>.development.catalystserverless.in/server/tnpc_api
+UI        https://<app>.onslate.in                          ← the hosted UI
+API       https://tnpowercenter-60083738829.development.catalystserverless.in/server/tnpc_api
 ```
 
-Two different origins. **A relative API path will not work**, and every call is
-cross-origin. So the client must be built with an absolute API base:
+The Next.js app proxies `/api/*` to the function using the server-only
+`TNPC_API_URL` in `web/.env.production`. The browser never calls the function
+directly, so CORS is not required on this path.
 
-```bash
-cd ~/zoho-workspace/TNPowerCenter
-npm run web:install
-
-cd web
-NEXT_PUBLIC_API_BASE=https://<project>.development.catalystserverless.in/server/tnpc_api \
-  npm run build
-cd ..
-npm run web:sync && npm run web:package
-```
-
-Get that hostname from the function deploy output, and confirm it answers
-`/server/tnpc_api/health` before you build against it.
-
-Then, in the Catalyst console, **whitelist the Slate origin under the project's
-CORS domains**. Catalyst intercepts `OPTIONS` at the platform level, so this is
-the only place CORS can be configured — the function deliberately sends no CORS
-headers of its own, because a duplicated `Access-Control-Allow-Origin` makes the
-browser reject the response entirely.
-
-For the vanilla client the equivalent is one command:
-
-```bash
-node tools/package-vanilla.js https://<project>.development.catalystserverless.in/server/tnpc_api
-```
-
-> **If `next build` fails and time is short**, the original zero-build client is
-> preserved at `client/tnpc_web_vanilla/`. Copy its three files into
-> `client/tnpc_web/` and carry on — it needs no build step and is known to work.
-> Nothing else in the deploy changes.
-
-**Copy the source over the generated scaffold:**
-
-```bash
-cd ~/tnpc-deploy
-SRC=~/zoho-workspace/TNPowerCenter
-
-cp $SRC/functions/tnpc_api/*.js  functions/tnpc_api/
-cp -r $SRC/client/tnpc_web/*     client/tnpc_web/
-```
-
-Keep the CLI's generated `catalyst-config.json` and `client-package.json`.
-Two things the CLI cares about: the function's `main` / `source` must point at
-`index.js`, and `catalyst.json` needs an explicit `functions.targets` array —
-a `source` alone is not enough.
-
-**Deploy the function with the CLI. Slate does not host functions:**
+**Deploy the function. The hosted UI does not host it:**
 
 ```bash
 catalyst deploy --only functions
 ```
 
-**Deploy the UI through Slate**, which reads from GitHub rather than the CLI.
-In the Catalyst console → **Slate**, connect the repository, branch `main`, and
-set:
-
-| Setting | Value |
-|---|---|
-| Framework | **Static** |
-| Root directory | `client/tnpc_web` |
-
-Root directory is not optional — point Slate at the repository root and `/`
-serves a 404, because `index.html` is one level down. Choosing **Static** also
-stops Slate running its own `npm run build`, which is what fails when the
-Next.js app lives in a subfolder.
-
-**Set the environment variables** in the Catalyst console →
-*Project → Settings → Environment Variables* (production environment):
+Set function environment variables in the hosting console (Development), or
+pass them at deploy time via a local-only `env_variables` block that you do
+not commit:
 
 | Key | Value |
 |---|---|
@@ -212,28 +145,50 @@ Next.js app lives in a subfolder.
 | `ZOHO_API_BASE` | `https://projects.zoho.in/api/v3` |
 | `AUTH_SIGNING_KEY` | any long random string |
 
-**Deploy:**
+Confirm:
 
 ```bash
-catalyst deploy
+curl https://tnpowercenter-60083738829.development.catalystserverless.in/server/tnpc_api/health
 ```
 
-The CLI prints your Slate URL, something like
-`https://tnpowercenter-XXXXXXXXX.development.catalystserverless.in/app/index.html`
+Expect `"status":"ok"` and `"portalConfigured":true`.
+
+**Deploy the UI:**
+
+```bash
+catalyst deploy slate -m "TNPowerCenter Next.js UI"
+```
+
+The CLI prints the app URL, e.g. `https://tnpc-web-dyggvgva.onslate.in`.
+
+If the Next.js host fails, the verified fallback is a static export:
+
+```bash
+cd web
+NEXT_STATIC_EXPORT=true \
+NEXT_PUBLIC_API_BASE=https://tnpowercenter-60083738829.development.catalystserverless.in/server/tnpc_api \
+  npm run build
+cd ..
+npm run web:sync
+```
+
+Then relink the hosted UI as **Static** with source `client/tnpc_web`, and
+whitelist that origin under the project's CORS domains. Leave
+`SEND_CORS_HEADERS` unset on the function.
 
 ---
 
 ## Step 4 — Confirm it is live
 
 ```bash
-curl https://<your-catalyst-domain>/server/tnpc_api/health
+curl https://tnpowercenter-60083738829.development.catalystserverless.in/server/tnpc_api/health
 ```
 
-Expect `"status":"ok"` and `"zohoConfigured":true`. If `zohoConfigured` is
-`false`, the environment variables did not reach the production environment —
-check you set them on the right environment and redeploy.
+Expect `"status":"ok"` and `"portalConfigured":true`. If `portalConfigured` is
+`false`, the environment variables did not reach the function — set them on
+Development and redeploy.
 
-Then open the Slate URL and sign in.
+Then open the app URL (`https://tnpc-web-dyggvgva.onslate.in`) and sign in.
 
 ---
 
@@ -242,22 +197,22 @@ Then open the Slate URL and sign in.
 Symptoms and their actual causes, in the order you're likely to meet them.
 
 **`401 INVALID_TOKEN` on every route, even `/health`.**
-Something is sending an `Authorization: Bearer …` header. Catalyst validates
+Something is sending an `Authorization: Bearer …` header. The host platform validates
 that header as one of *its own* OAuth tokens and rejects the request before your
 code runs. This app carries its session in **`X-App-Token`** for exactly that
 reason — if you're testing with curl, use that header, not `Authorization`.
 
 **CORS error saying the header "contains multiple values".**
-Both Catalyst and the function are setting `Access-Control-Allow-Origin`.
-Whitelist the Slate origin in the Catalyst console and leave
+Both the host platform and the function are setting `Access-Control-Allow-Origin`.
+Whitelist the UI origin in the hosting console and leave
 `SEND_CORS_HEADERS` unset so the function stays quiet.
 
 **CORS error with no `Access-Control-Allow-Origin` at all.**
-The opposite: the Slate origin isn't whitelisted. Catalyst answers `OPTIONS`
+The opposite: the UI origin isn't whitelisted. The platform answers `OPTIONS`
 itself, so an in-function handler can never fix this.
 
 **Dashboard 502s on the first request after an idle period, then works.**
-Cold start with several parallel Zoho reads racing to refresh the token.
+Cold start with several parallel portal reads racing to refresh the token.
 `zoho-client.js` coalesces concurrent refreshes onto a single request to prevent
 this — if you see it, that logic has been altered.
 
@@ -269,11 +224,11 @@ Try the alternate API host in `.env`:
 `ZOHO_API_BASE=https://projectsapi.zoho.in/api/v3`
 
 **The UI is stale after a redeploy.**
-Catalyst caches client assets. Hard-refresh (⌘⇧R). The API sends
+The host platform caches client assets. Hard-refresh (⌘⇧R). The API sends
 `Cache-Control: no-store`, so data is never stale — only the bundle.
 
 **Numbers behave like text (totals concatenating).**
-Zoho v3 returns `Numeric` fields as strings and `Double` as numbers. Coerce with
+API v3 returns `Numeric` fields as strings and `Double` as numbers. Coerce with
 `Number()` — the engine already does this for `ai_confidence`.
 
 ---
@@ -283,7 +238,7 @@ Zoho v3 returns `Numeric` fields as strings and `Double` as numbers. Coerce with
 Before this is anything other than a demo:
 
 - Replace the three hard-coded accounts in `functions/tnpc_api/auth.js` with
-  Catalyst Authentication and enforce MFA on any account holding
+  platform authentication and enforce MFA on any account holding
   `directive:issue`.
 - Move the signing key to a secret store rather than an environment variable.
 - Delete every record labelled `DEMO DATA` from the portal.

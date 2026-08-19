@@ -2,13 +2,13 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Catalyst Slate — client/tnpc_web                            │
-│  Zero-build ES modules. Command Center · Complaints ·         │
-│  Directives · Citizen Intake · investigation drawer          │
+│  Hosted UI — web/ (Next.js)                                  │
+│  Command Center · Complaints · Directives · Intake · drawer  │
+│  Browser calls same-origin /api/*                            │
 └───────────────────────────┬──────────────────────────────────┘
-                            │  fetch  /server/tnpc_api/*
+                            │  server-side proxy (TNPC_API_URL)
 ┌───────────────────────────▼──────────────────────────────────┐
-│  Catalyst Advanced I/O function — functions/tnpc_api         │
+│  API function — functions/tnpc_api                           │
 │                                                              │
 │  index.js        routing · authn · authz · DTOs · cache      │
 │  auth.js         permission sets · scopes · session tokens   │
@@ -17,24 +17,24 @@
 │  zoho-client.js  OAuth refresh + REST                        │
 │  zoho-schema.js  ID map + every configurable policy          │
 └───────────────────────────┬──────────────────────────────────┘
-                            │  Zoho Projects REST v3
+                            │  the project portal REST v3
 ┌───────────────────────────▼──────────────────────────────────┐
-│  Zoho Projects — the ONLY system of record                   │
+│  Project portal — the ONLY system of record                  │
 │  Projects · Issues · Tasks · Users · custom modules          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 There is no external database, no cache server and no message queue. State lives
-in Zoho Projects; the function is stateless apart from a 30-second read-through
+in the project portal; the function is stateless apart from a 30-second read-through
 cache in module scope.
 
 ---
 
 ## Decisions worth defending
 
-### D1 — Zoho Projects is the database, not a sync target
+### D1 — the project portal is the database, not a sync target
 
-Government concepts map onto Zoho primitives (see README). Nothing is mirrored
+Government concepts map onto portal primitives (see README). Nothing is mirrored
 into a second store, so there is no divergence to reconcile and no "which system
 is right" question. The cost is that queries are shaped by the Projects API
 rather than by SQL; at demo scale this is invisible, and the mitigation for real
@@ -46,9 +46,9 @@ scale is in *Scaling* below.
 This is why 21 tests run with no credentials, no network and no fixtures, and
 why SLA behaviour is reproducible rather than "whatever today is".
 
-### D3 — Power Center owns SLA, not Zoho
+### D3 — Power Center owns SLA, not the portal
 
-Zoho's native `due_date` refuses any value earlier than the record's
+the portal's native `due_date` refuses any value earlier than the record's
 `created_time`, which makes it unusable for migrated or seeded history. The
 deadline lives in Power Center's own `sla_due` field and the state machine
 (`DUE → AT_RISK → BREACHED`, or `RESOLVED`) is computed here. The API constraint
@@ -59,7 +59,7 @@ forced the design the product spec already wanted.
 SLA policy, scorecard weights, health bands, minimum coverage and red-flag
 factor weights are all values in `zoho-schema.js`. Changing what "healthy" means
 is an edit to one object, not a change to scoring logic. Moving them into a
-Catalyst data store or a Zoho custom module is a drop-in replacement.
+a platform data store or a portal custom module is a drop-in replacement.
 
 ### D5 — Visibility and authority are separate gates
 
@@ -89,26 +89,27 @@ same gates and the same evidence contract.
 
 `node:http`, `node:crypto`, `node:test` and the platform `fetch` on the client.
 The function's `dependencies` block is empty, there is no build step between
-local and Catalyst, and cold start is minimal. This began as a constraint (no
+local and hosted, and cold start is minimal. This began as a constraint (no
 package registry in the build environment) and was kept because it earned its
 place. The exception is `auth.js`, whose hand-rolled token signing must be
-replaced by Catalyst Authentication before production.
+replaced by platform authentication before production.
 
 ---
 
 ## Request lifecycle
 
 ```
-fetch → normalizePath (strips /server/<fn>)
+browser /api/* → Next.js route (same origin) → function /server/tnpc_api/*
+      → normalizePath (strips /server/<fn>)
       → route match
-      → authenticate (HMAC bearer)
+      → authenticate (HMAC via X-App-Token)
       → requirePermission            ← server-side, before the handler
       → handler
-          ├─ loadAllComplaints (30s read-through cache)
+          ├─ loadAllComplaints (read-through cache)
           ├─ engine.* (pure decisions)
           └─ zoho-client (writes)
       → invalidate cache on write
-      → JSON + CORS
+      → JSON
 ```
 
 ## Caching and the 30-second rule
@@ -130,10 +131,10 @@ The path, in order:
 1. Server-side filtering on the Projects list APIs instead of client-side
    filtering after the fetch.
 2. Materialise `department_scores` and a state-pulse snapshot into custom
-   modules on a **Catalyst Cron**, and have the dashboard read snapshots.
-3. Move the read-through cache into **Catalyst Cache** so it is shared across
+   modules on a **a scheduled job**, and have the dashboard read snapshots.
+3. Move the read-through cache into **shared cache** so it is shared across
    function instances rather than per-instance.
-4. Replace polling with Zoho Projects webhooks into a Catalyst function, with an
+4. Replace polling with the project portal webhooks into a the API function, with an
    idempotency record keyed on the event ID so duplicate delivery cannot produce
    duplicate business actions.
 

@@ -62,6 +62,6 @@ server.listen(PORT, () => {
   console.log(`\n  Tamil Nadu Power Center — local\n`);
   console.log(`  UI   http://localhost:${PORT}`);
   console.log(`  API  http://localhost:${PORT}/server/tnpc_api/health`);
-  console.log(`  Zoho ${configured ? 'credentials loaded' : 'NOT configured — set ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET / ZOHO_REFRESH_TOKEN'}`);
+  console.log(`  Portal ${configured ? 'credentials loaded' : 'NOT configured — set credentials in .env'}`);
   console.log(`\n  Sign in as  cm@tnpowercenter.in / PowerCenter@2026\n`);
 });

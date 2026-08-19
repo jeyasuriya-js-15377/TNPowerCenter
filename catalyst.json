@@ -1,0 +1,15 @@
+{
+  "functions": {
+    "targets": [
+      "tnpc_api"
+    ],
+    "ignore": [],
+    "source": "functions"
+  },
+  "slate": [
+    {
+      "name": "tnpc-web",
+      "source": "web"
+    }
+  ]
+}

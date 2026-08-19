@@ -61,7 +61,7 @@ function request(method, urlString, { headers = {}, body = null } = {}) {
         });
       }
     );
-    req.on('timeout', () => req.destroy(new Error('Zoho request timed out')));
+    req.on('timeout', () => req.destroy(new Error('Portal request timed out')));
     req.on('error', reject);
     if (payload) req.write(payload);
     req.end();
@@ -87,7 +87,7 @@ async function refreshAccessToken() {
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
   if (!clientId || !clientSecret || !refreshToken) {
-    throw Object.assign(new Error('Zoho credentials are not configured'), { code: 'ZOHO_NOT_CONFIGURED' });
+    throw Object.assign(new Error('Portal credentials are not configured'), { code: 'ZOHO_NOT_CONFIGURED' });
   }
 
   const params = new URLSearchParams({
@@ -103,7 +103,7 @@ async function refreshAccessToken() {
   });
 
   if (status !== 200 || !body || !body.access_token) {
-    throw Object.assign(new Error('Failed to obtain Zoho access token'), {
+    throw Object.assign(new Error('Failed to obtain access token'), {
       code: 'ZOHO_AUTH_FAILED',
       detail: body,
     });
@@ -144,7 +144,7 @@ async function call(method, path, { query = null, json = null, form = null, retr
   }
 
   if (status >= 400) {
-    throw Object.assign(new Error(`Zoho ${method} ${path} failed with ${status}`), {
+    throw Object.assign(new Error(`Portal ${method} ${path} failed with ${status}`), {
       code: 'ZOHO_API_ERROR',
       status,
       detail: body,

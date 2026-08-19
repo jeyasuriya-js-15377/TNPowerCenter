@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Engine tests. No network, no Zoho, no credentials — the engine is pure and
+ * Engine tests. No network, no portal, no credentials — the engine is pure and
  * takes `now` as an argument, so every assertion below is deterministic.
  *
  * Run: npm test

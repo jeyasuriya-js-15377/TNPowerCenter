@@ -1,9 +1,7 @@
 # Tamil Nadu Power Center
 
-**An executive operating system for government performance, running entirely on
-Zoho Projects and deployed on Zoho Catalyst.**
+**An executive operating system for government performance.**
 
-Built for the Zoho Projects 20th anniversary challenge.
 Industry: **Government / Public Administration**.
 
 ---
@@ -28,22 +26,22 @@ Power Center closes the loop:
 Citizen complaint → classification → routing → accountable officer
    → SLA monitoring → resolution → citizen validation
    → department score → state pulse → red flag
-   → CM directive → execution in Zoho → verified outcome
+   → CM directive → execution → verified outcome
 ```
 
-Everything above happens inside Zoho Projects. There is no external database.
+The project portal is the system of record. There is no external database.
 
 ---
 
-## How Zoho Projects becomes the database
+## How the portal becomes the database
 
-| Government concept | Zoho Projects primitive |
+| Government concept | Portal primitive |
 |---|---|
 | Secretariat department | **Project** |
 | Citizen complaint | **Issue** |
 | Complaint lifecycle | Native issue statuses — `Open → InProgress → ToBeTested → Closed`, plus `Reopen` |
 | Priority | Native **severity** picklist |
-| Officer | Portal **user** (ZPUID) |
+| Officer | Portal **user** |
 | Directive execution | **Task** in the responsible department's project |
 | District | Custom module `district` |
 | CM directive | Custom module `cm_directive` |
@@ -54,8 +52,7 @@ Complaint-specific data lives in eight custom fields on the Issues module:
 `citizen_ref`, `district`, `complaint_category`, `sentiment`, `ai_confidence`,
 `citizen_satisfaction`, `sla_due`, `reported_at`.
 
-**Every module, field and demo record was created through the Zoho Projects MCP
-server.** The ID map is in `functions/tnpc_api/zoho-schema.js`.
+The ID map is in `functions/tnpc_api/zoho-schema.js`.
 
 `ToBeTested` meaning *resolved, pending verification* turned out to be an exact
 fit for *awaiting citizen validation*, so the complaint lifecycle needed zero
@@ -63,11 +60,11 @@ status configuration.
 
 ---
 
-## What the app adds that Zoho does not
+## What the app adds
 
-Zoho Projects is an excellent execution engine. It is not an executive
-intelligence layer. `functions/tnpc_api/engine.js` supplies that, as pure
-functions with no I/O and an injected clock:
+The portal is an execution engine. It is not an executive intelligence layer.
+`functions/tnpc_api/engine.js` supplies that, as pure functions with no I/O and
+an injected clock:
 
 - **SLA engine** — Power Center owns the deadline. Warns `AT_RISK` *before*
   breach, not after. Policy is a config table, not code.
@@ -111,17 +108,16 @@ npm test            # 21 tests, no credentials needed
 npm run check       # syntax check every file
 ```
 
-Full application against live Zoho Projects:
+Full application against the live portal (credentials from `.env`):
 
 ```bash
-ZOHO_CLIENT_ID=… ZOHO_CLIENT_SECRET=… ZOHO_REFRESH_TOKEN=… \
 AUTH_SIGNING_KEY=$(openssl rand -base64 36) \
 node tools/local-server.js
 # → http://localhost:4000
 ```
 
-`tools/local-server.js` mounts the identical Catalyst handler behind the
-identical `/server/tnpc_api` path, so local behaviour matches deployment.
+`tools/local-server.js` mounts the identical function handler behind
+`/server/tnpc_api`, so local behaviour matches deployment.
 
 **Demo accounts**
 
@@ -138,22 +134,20 @@ Deployment: **`docs/DEPLOY.md`**.
 ## Layout
 
 ```
-functions/tnpc_api/      Catalyst Advanced I/O function — zero npm dependencies
+functions/tnpc_api/      API function — zero npm dependencies
   index.js               routing, authn/authz, endpoints
   engine.js              SLA · scorecard · pulse · red flags · classifier (pure)
-  zoho-client.js         Zoho Projects REST client + OAuth refresh
+  zoho-client.js         portal REST client + OAuth refresh
   zoho-schema.js         the ID map and every configurable policy
   auth.js                permission sets, scopes, session tokens
   seed.js                demo data definitions
-web/                     Next.js 14 App Router client, statically exported
-  app/                   layout, shell, design system
+web/                     Next.js 14 App Router UI
+  app/                   layout, shell, design system, /api proxy route
   components/            command centre · complaints · directives · intake · drawer
-  lib/                   api client, presentation semantics
-client/tnpc_web/         Catalyst Slate deploy artifact (the Next.js export)
-client/tnpc_web_vanilla/ zero-build fallback client — no build step, known good
+  lib/                   api client, theme, presentation semantics
+catalyst.json            CLI link: tnpc_api + hosted UI tnpc-web
+client/tnpc_web/         optional static-export target
 tools/local-server.js    run the backend locally
-tools/verify-zoho.js     probe every Zoho REST path the app depends on
-tools/sync-web.js        copy the Next.js export into the Slate folder
 tests/engine.test.js     21 tests
 docs/                    DEPLOY · SUBMISSION · WHAT_BROKE · VIDEO_SCRIPT · ARCHITECTURE
 ```
@@ -161,13 +155,16 @@ docs/                    DEPLOY · SUBMISSION · WHAT_BROKE · VIDEO_SCRIPT · A
 **Build the client**
 
 ```bash
-npm run web:install    # Next.js into web/
-npm run web:ship       # static export → client/tnpc_web/
+npm run web:install
+cd web && npm run build
 ```
 
-The backend has zero runtime dependencies and needs no build. Next.js is the
-only thing in the repository that installs anything, and the vanilla fallback
-client exists precisely so a failed frontend build can never block a deploy.
+The live UI is `web/`. The browser talks to `/api`, which proxies to the
+function. Dark and light themes are available from the header and the sign-in
+screen.
+
+The backend has zero runtime dependencies. Next.js is the only package that
+installs anything.
 
 ---
 
@@ -175,9 +172,9 @@ client exists precisely so a failed frontend build can never block a deploy.
 
 Written up properly in **`docs/WHAT_BROKE.md`**. The short version: the demo
 uses hand-rolled session tokens and three hard-coded accounts instead of
-Catalyst Authentication with MFA; the red-flag engine covers clusters and severe
+platform authentication with MFA; the red-flag engine covers clusters and severe
 breaches but not cross-department correlation; and there is no historical
-case-matching yet. All are called out in the code where they matter.
+case-matching yet.
 
 **All data in the portal is clearly-labelled synthetic `DEMO DATA`. None of it
 is real government information and none of it should be presented as such.**

@@ -16,11 +16,21 @@ tools/.planner.tmp.js
 # Catalyst
 .catalyst/
 .catalystrc
+**/.catalyst/
+
+# Generated Next.js static export (fallback path: npm run web:sync)
+client/tnpc_web/**
+!client/tnpc_web/client-package.json
 
 # Secrets — never commit a filled-in copy. .env.example is tracked.
 .env
 .env.*
 !.env.example
+
+# Deployment config for the Slate build, deliberately committed. Contains only
+# the public function endpoint — never a credential. Zoho secrets live on the
+# Catalyst function's own environment.
+!web/.env.production
 
 # Logs and OS noise
 *.log
