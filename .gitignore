@@ -13,6 +13,9 @@ dist/
 # Scratch files
 tools/.planner.tmp.js
 
+# Working notes — kept on disk, not versioned
+docs/*.md
+
 # Catalyst
 .catalyst/
 .catalystrc

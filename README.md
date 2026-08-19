@@ -127,7 +127,9 @@ node tools/local-server.js
 | `warroom@tnpowercenter.in` | `WarRoom@2026` |
 | `water@tnpowercenter.in` | `Water@2026` |
 
-Deployment: **`docs/DEPLOY.md`**.
+The live UI is `web/`.
+
+Deployment notes live in the local `docs/` folder (not in git).
 
 ---
 
@@ -149,7 +151,6 @@ catalyst.json            CLI link: tnpc_api + hosted UI tnpc-web
 client/tnpc_web/         optional static-export target
 tools/local-server.js    run the backend locally
 tests/engine.test.js     21 tests
-docs/                    DEPLOY · SUBMISSION · WHAT_BROKE · VIDEO_SCRIPT · ARCHITECTURE
 ```
 
 **Build the client**
@@ -170,10 +171,9 @@ installs anything.
 
 ## Honest limitations
 
-Written up properly in **`docs/WHAT_BROKE.md`**. The short version: the demo
-uses hand-rolled session tokens and three hard-coded accounts instead of
-platform authentication with MFA; the red-flag engine covers clusters and severe
-breaches but not cross-department correlation; and there is no historical
+The demo uses hand-rolled session tokens and three hard-coded accounts instead
+of platform authentication with MFA; the red-flag engine covers clusters and
+severe breaches but not cross-department correlation; and there is no historical
 case-matching yet.
 
 **All data in the portal is clearly-labelled synthetic `DEMO DATA`. None of it
