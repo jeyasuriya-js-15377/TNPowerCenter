@@ -6,8 +6,18 @@
  * the client is hosted somewhere else — CORS is already permitted server-side.
  */
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || '/server/tnpc_api';
+/**
+ * Where the browser sends API calls.
+ *
+ * Default `/api` is the Next.js proxy route in app/api/[...path]/route.js, which
+ * forwards server-side to the Catalyst function. That keeps every request
+ * same-origin: no CORS, and the function's URL is a server env var rather than
+ * something compiled into this bundle.
+ *
+ * Set NEXT_PUBLIC_API_BASE to an absolute function URL when building a STATIC
+ * export, which has no server and therefore no proxy.
+ */
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api';
 
 const SESSION_KEY = 'tnpc';
 
