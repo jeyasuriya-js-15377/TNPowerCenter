@@ -52,12 +52,14 @@ b,strong{font-weight:600}
 .brand{display:flex;gap:14px;align-items:center}
 .brand h1{font-size:20px}
 .brand-sub{margin:2px 0 0;color:var(--ink-3);font-size:13px}
-.brand-mark{
-  width:34px;height:34px;border-radius:9px;flex:0 0 auto;
-  background:linear-gradient(150deg,var(--accent),#7b5cf0);
-  box-shadow:0 0 0 1px var(--line-2), 0 6px 18px -8px var(--accent);
+.brand-marks{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.brand-mark-img{
+  width:36px;height:36px;object-fit:cover;flex:0 0 auto;
+  border-radius:50%;background:#fff;
+  box-shadow:0 0 0 1px var(--line-2);
 }
-.brand.small .brand-mark{width:26px;height:26px;border-radius:7px}
+.brand-mark-img.tn{object-fit:contain;padding:1px}
+.brand.small .brand-mark-img{width:28px;height:28px}
 .brand.small strong{display:block;font-size:14px}
 .backbone{color:var(--ink-3);font-size:11px;letter-spacing:.03em;text-transform:uppercase}
 

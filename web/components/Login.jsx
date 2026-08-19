@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandMarks from '@/components/BrandMarks';
 
 const DEMO_ACCOUNTS = [
   {
@@ -55,7 +56,7 @@ export default function Login({ onSignedIn }) {
       </div>
       <div className="login-card">
         <div className="brand">
-          <div className="brand-mark" />
+          <BrandMarks />
           <div>
             <h1>Tamil Nadu Power Center</h1>
             <p className="brand-sub">Executive operating system for government performance</p>

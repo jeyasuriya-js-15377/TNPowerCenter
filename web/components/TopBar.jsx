@@ -2,6 +2,7 @@
 
 import { humanise } from '@/lib/format';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandMarks from '@/components/BrandMarks';
 
 const VIEWS = [
   { key: 'command', label: 'Command Center' },
@@ -16,7 +17,7 @@ export default function TopBar({ user, view, onView, onRefresh, onSignOut, busy 
   return (
     <header className="topbar">
       <div className="brand small">
-        <div className="brand-mark" />
+        <BrandMarks />
         <div>
           <strong>Tamil Nadu Power Center</strong>
           <span className="backbone">Government performance</span>

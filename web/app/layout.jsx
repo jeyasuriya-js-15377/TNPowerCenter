@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
         <link
           rel="icon"
-          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b1220'/><path d='M16 6l8 5v10l-8 5-8-5V11z' fill='none' stroke='%234f9cf9' stroke-width='2'/></svg>"
+          href="/brand/tamil-nadu-emblem.png"
         />
       </head>
       <body>{children}</body>
