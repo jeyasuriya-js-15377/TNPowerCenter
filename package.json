@@ -14,7 +14,9 @@
     "web:build": "cd web && NEXT_PUBLIC_BASE_PATH=/app npm run build",
     "web:build:root": "cd web && npm run build",
     "web:sync": "node tools/sync-web.js",
-    "web:ship": "npm run web:build && npm run web:sync"
+    "web:package": "node tools/package-web.js",
+    "web:vanilla": "node tools/package-vanilla.js",
+    "web:ship": "npm run web:build:root && npm run web:sync && npm run web:package"
   },
   "engines": {
     "node": ">=18"

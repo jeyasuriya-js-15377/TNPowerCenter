@@ -7,6 +7,9 @@ web/out/
 next-env.d.ts
 *.tsbuildinfo
 
+# Packaged upload artifact
+dist/
+
 # Catalyst
 .catalyst/
 .catalystrc

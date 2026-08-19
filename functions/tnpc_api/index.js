@@ -62,14 +62,35 @@ function invalidateCache() {
  * HTTP plumbing
  * ------------------------------------------------------------------ */
 
+/**
+ * CORS is handled by Catalyst, not here.
+ *
+ * Catalyst intercepts OPTIONS at the platform level and applies the project's
+ * CORS domain whitelist. If this function ALSO sets Access-Control-Allow-Origin
+ * the browser sees the header twice ("contains multiple values") and blocks the
+ * response outright. So the default is to send nothing and let the platform own
+ * it — whitelist the Slate origin under the project's CORS domains instead.
+ *
+ * Set SEND_CORS_HEADERS=true only when running outside Catalyst (for example
+ * serving the client from a different port in local development).
+ */
+const SEND_CORS = process.env.SEND_CORS_HEADERS === 'true';
+
+const corsHeaders = () =>
+  SEND_CORS
+    ? {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, X-App-Token',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+      }
+    : {};
+
 function send(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    ...corsHeaders(),
   });
   res.end(body);
 }
@@ -107,7 +128,21 @@ function normalizePath(rawUrl) {
   return { path, query: Object.fromEntries(url.searchParams) };
 }
 
+/**
+ * Session token arrives in X-App-Token, NOT Authorization.
+ *
+ * Catalyst treats an `Authorization: Bearer …` header on an AdvancedIO function
+ * as one of its own OAuth tokens and rejects the request with 401 INVALID_TOKEN
+ * before the handler ever runs — even on a route with no auth. Using a custom
+ * header sidesteps the platform entirely.
+ *
+ * Authorization is still accepted as a fallback so curl and the local server
+ * behave the same way; on Catalyst that path is simply unreachable.
+ */
 function principal(req) {
+  const custom = req.headers['x-app-token'];
+  if (custom) return auth.verify(String(custom));
+
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   return token ? auth.verify(token) : null;
@@ -488,12 +523,9 @@ route('POST', /^\/admin\/seed$/, 'directive:issue', async (ctx) => {
  * ------------------------------------------------------------------ */
 
 module.exports = async (req, res) => {
+  // On Catalyst this never runs — the platform answers OPTIONS itself.
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-    });
+    res.writeHead(204, corsHeaders());
     return res.end();
   }
 

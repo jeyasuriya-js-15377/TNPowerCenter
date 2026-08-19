@@ -18,7 +18,13 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 const nextConfig = {
   output: 'export',
   basePath: basePath || undefined,
-  assetPrefix: basePath || undefined,
+
+  // With no explicit base path, emit RELATIVE asset URLs ('./_next/…') so the
+  // export runs unchanged whether Slate serves it from the domain root or from
+  // a prefix like /app. This app is a single route with no client-side page
+  // navigation, which is what makes relative assets safe here.
+  assetPrefix: basePath || './',
+
   trailingSlash: true,
 
   // No Next.js image optimiser exists in a static export.

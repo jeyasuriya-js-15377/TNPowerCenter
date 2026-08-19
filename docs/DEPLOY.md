@@ -20,10 +20,23 @@ an `invalid_client` error.
 3. Copy the **Client ID** and **Client Secret**.
 4. Open the **Generate Code** tab and enter:
 
-   **Scope**
+   **Scope** — this exact string is known to work on a `.in` portal:
    ```
-   ZohoProjects.portals.READ,ZohoProjects.projects.ALL,ZohoProjects.bugs.ALL,ZohoProjects.tasks.ALL,ZohoProjects.users.READ,ZohoProjects.entity.ALL,ZohoProjects.customfields.ALL,ZohoProjects.customviews.READ
+   ZohoProjects.projects.ALL,ZohoProjects.tasks.ALL,ZohoProjects.portals.ALL,ZohoProjects.timesheets.ALL,ZohoProjects.bugs.ALL,ZohoProjects.milestones.ALL,ZohoProjects.tags.ALL,ZohoProjects.users.ALL,ZohoProjects.search.READ
    ```
+
+   > **`ZohoProjects.bugs.ALL` is the one that matters most.** In the Projects
+   > API "bugs" *are* issues, and every citizen complaint in this app is an
+   > issue. Without it the dashboard, the complaint list and the red-flag engine
+   > all return nothing.
+   >
+   > **Reads work with `.READ`; writes need `.ALL`.** Creating a complaint or a
+   > directive against a custom module returns `401 INVALID_OAUTHSCOPE` on a
+   > read-only token. Use `.ALL` throughout.
+
+   After exchanging the code, **check the `scope` field in the response** before
+   going further. If a scope you asked for isn't listed, the console silently
+   dropped it and everything depending on it will fail later.
 
    **Time Duration** `10 minutes`  **Scope Description** `Power Center`
 
@@ -107,17 +120,44 @@ catalyst init
 #   Client:    name it exactly  tnpc_web
 ```
 
-**Build the Next.js client first**, back in this repository:
+### Slate and the function are on different domains
+
+This is the single most important thing to internalise before building the
+client:
+
+```
+UI        https://<something>.onslate.in                    ← Catalyst Slate
+API       https://<project>.development.catalystserverless.in/server/tnpc_api
+```
+
+Two different origins. **A relative API path will not work**, and every call is
+cross-origin. So the client must be built with an absolute API base:
 
 ```bash
 cd ~/zoho-workspace/TNPowerCenter
-npm run web:install     # installs Next.js into web/
-npm run web:ship        # static export → synced into client/tnpc_web/
+npm run web:install
+
+cd web
+NEXT_PUBLIC_API_BASE=https://<project>.development.catalystserverless.in/server/tnpc_api \
+  npm run build
+cd ..
+npm run web:sync && npm run web:package
 ```
 
-`web:ship` builds with `basePath=/app`, which is how Slate normally serves the
-client. If your deployed URL turns out to serve `index.html` from the domain
-root instead, rebuild with `npm run web:build:root && npm run web:sync`.
+Get that hostname from the function deploy output, and confirm it answers
+`/server/tnpc_api/health` before you build against it.
+
+Then, in the Catalyst console, **whitelist the Slate origin under the project's
+CORS domains**. Catalyst intercepts `OPTIONS` at the platform level, so this is
+the only place CORS can be configured — the function deliberately sends no CORS
+headers of its own, because a duplicated `Access-Control-Allow-Origin` makes the
+browser reject the response entirely.
+
+For the vanilla client the equivalent is one command:
+
+```bash
+node tools/package-vanilla.js https://<project>.development.catalystserverless.in/server/tnpc_api
+```
 
 > **If `next build` fails and time is short**, the original zero-build client is
 > preserved at `client/tnpc_web_vanilla/`. Copy its three files into
@@ -135,7 +175,29 @@ cp -r $SRC/client/tnpc_web/*     client/tnpc_web/
 ```
 
 Keep the CLI's generated `catalyst-config.json` and `client-package.json`.
-Only make sure the function's `main` / `source` points at `index.js`.
+Two things the CLI cares about: the function's `main` / `source` must point at
+`index.js`, and `catalyst.json` needs an explicit `functions.targets` array —
+a `source` alone is not enough.
+
+**Deploy the function with the CLI. Slate does not host functions:**
+
+```bash
+catalyst deploy --only functions
+```
+
+**Deploy the UI through Slate**, which reads from GitHub rather than the CLI.
+In the Catalyst console → **Slate**, connect the repository, branch `main`, and
+set:
+
+| Setting | Value |
+|---|---|
+| Framework | **Static** |
+| Root directory | `client/tnpc_web` |
+
+Root directory is not optional — point Slate at the repository root and `/`
+serves a 404, because `index.html` is one level down. Choosing **Static** also
+stops Slate running its own `npm run build`, which is what fails when the
+Next.js app lives in a subfolder.
 
 **Set the environment variables** in the Catalyst console →
 *Project → Settings → Environment Variables* (production environment):
@@ -175,17 +237,44 @@ Then open the Slate URL and sign in.
 
 ---
 
-## If the client cannot reach the API
+## When it doesn't work
 
-`client/tnpc_web/app.js` defaults to the same-origin path `/server/tnpc_api`,
-which is how Catalyst serves Advanced I/O functions. If your setup differs, add
-one line to `index.html` above the `app.js` script tag:
+Symptoms and their actual causes, in the order you're likely to meet them.
 
-```html
-<script>window.TNPC_API_BASE = 'https://<your-domain>/server/tnpc_api';</script>
-```
+**`401 INVALID_TOKEN` on every route, even `/health`.**
+Something is sending an `Authorization: Bearer …` header. Catalyst validates
+that header as one of *its own* OAuth tokens and rejects the request before your
+code runs. This app carries its session in **`X-App-Token`** for exactly that
+reason — if you're testing with curl, use that header, not `Authorization`.
 
-CORS is already permitted by the function, so a cross-origin base works.
+**CORS error saying the header "contains multiple values".**
+Both Catalyst and the function are setting `Access-Control-Allow-Origin`.
+Whitelist the Slate origin in the Catalyst console and leave
+`SEND_CORS_HEADERS` unset so the function stays quiet.
+
+**CORS error with no `Access-Control-Allow-Origin` at all.**
+The opposite: the Slate origin isn't whitelisted. Catalyst answers `OPTIONS`
+itself, so an in-function handler can never fix this.
+
+**Dashboard 502s on the first request after an idle period, then works.**
+Cold start with several parallel Zoho reads racing to refresh the token.
+`zoho-client.js` coalesces concurrent refreshes onto a single request to prevent
+this — if you see it, that logic has been altered.
+
+**`401 INVALID_OAUTHSCOPE` on writes only.**
+Your refresh token has read scopes. Regenerate with `.ALL` (see step 1).
+
+**Reads 404 with a token that is definitely valid.**
+Try the alternate API host in `.env`:
+`ZOHO_API_BASE=https://projectsapi.zoho.in/api/v3`
+
+**The UI is stale after a redeploy.**
+Catalyst caches client assets. Hard-refresh (⌘⇧R). The API sends
+`Cache-Control: no-store`, so data is never stale — only the bundle.
+
+**Numbers behave like text (totals concatenating).**
+Zoho v3 returns `Numeric` fields as strings and `Double` as numbers. Coerce with
+`Number()` — the engine already does this for `ai_confidence`.
 
 ---
 

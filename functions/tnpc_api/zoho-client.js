@@ -19,6 +19,17 @@ const API_BASE = process.env.ZOHO_API_BASE || 'https://projects.zoho.in/api/v3';
 
 let tokenCache = { value: null, expiresAt: 0 };
 
+/**
+ * In-flight refresh, shared across concurrent callers.
+ *
+ * The Command Center reads five department projects in parallel. On a cold
+ * function instance all five hit an empty token cache at once and each POSTs to
+ * Zoho's token endpoint simultaneously; Zoho rejects the burst and the whole
+ * dashboard 502s. Coalescing every concurrent refresh onto one promise means a
+ * cold start makes exactly one token request no matter how many reads fan out.
+ */
+let refreshInFlight = null;
+
 function request(method, urlString, { headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlString);
@@ -61,6 +72,17 @@ async function getAccessToken() {
   const now = Date.now();
   if (tokenCache.value && now < tokenCache.expiresAt - 60000) return tokenCache.value;
 
+  // Someone else is already refreshing — wait for their result rather than
+  // starting a second request.
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = refreshAccessToken().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function refreshAccessToken() {
   const clientId = process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;

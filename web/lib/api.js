@@ -56,7 +56,10 @@ export async function api(path, options = {}) {
     method,
     headers: {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // X-App-Token, never Authorization: Catalyst validates any
+      // `Authorization: Bearer …` sent to an AdvancedIO function as one of its
+      // own OAuth tokens and returns 401 before our handler runs.
+      ...(token ? { 'X-App-Token': token } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
